@@ -1,0 +1,62 @@
+# Roadmap
+
+Fitadel is built in phases. Phases 0–5 make up the MVP.
+UI/UX is designed mobile-first on every platform.
+
+## MVP
+
+### Phase 0: Foundations
+
+- [x] Nx workspace, repository conventions
+- [ ] Architecture decision records
+- [ ] CI with `nx affected`
+- [ ] Local infrastructure with Docker Compose
+
+### Phase 1: Food catalog
+
+- [ ] Food catalog service with search
+- [ ] Import from Open Food Facts and USDA FoodData Central
+- [ ] Barcode lookup
+- [ ] Custom and manually entered foods
+
+### Phase 2: Identity
+
+- [ ] OpenID Connect provider (authorization code + PKCE)
+- [ ] User accounts and sign-in
+
+### Phase 3: Goals and diary
+
+- [ ] Goals with a deficit or surplus in % or kcal → daily calorie budget
+- [ ] Food diary with daily totals
+- [ ] Event-driven integration between services (Kafka)
+
+### Phase 4: Web
+
+- [ ] Module Federation shell and micro-frontends
+- [ ] English and Russian localization
+- [ ] Infrastructure as code on AWS (Terraform)
+
+### Phase 5: Android
+
+- [ ] React Native app sharing domain libraries with the web
+- [ ] Barcode scanning with the camera
+- [ ] Mobile Module Federation (Re.Pack)
+
+## After the MVP
+
+### Phase 6: AI assistant
+
+- [ ] Bring-your-own-key support for Anthropic and OpenAI
+- [ ] The assistant proposes diary entries; the user confirms them.
+      The app stays the system of record.
+
+### Phase 7: Wearables and engagement
+
+- [ ] Activity sync via Android Health Connect (Garmin, Oura)
+- [ ] Activity-adjusted calorie budget
+- [ ] Push notifications and progress charts
+
+### Phase 8: Production
+
+- [ ] Kubernetes on AWS (EKS), continuous delivery
+- [ ] Observability, security hardening, cost controls
