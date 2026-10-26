@@ -2,7 +2,7 @@
 export const KCAL_PER_GRAM = {
   protein: 4,
   carbs: 4,
-  fat: 9,
+  fat: 8,
   alcohol: 7,
 } as const;
 
