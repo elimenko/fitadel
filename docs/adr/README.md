@@ -17,6 +17,7 @@ Write it when the decision is made, not after the fact.
 
 ## Index
 
-| ADR                                           | Title                         | Status   |
-| --------------------------------------------- | ----------------------------- | -------- |
-| [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
+| ADR                                              | Title                                   | Status   |
+| ------------------------------------------------ | --------------------------------------- | -------- |
+| [0001](0001-record-architecture-decisions.md)    | Record architecture decisions           | Accepted |
+| [0002](0002-nx-monorepo-with-pnpm-workspaces.md) | Use an Nx monorepo with pnpm workspaces | Accepted |
