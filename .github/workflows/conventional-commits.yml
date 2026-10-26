@@ -1,0 +1,41 @@
+name: Conventional Commits
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: tree:0
+          persist-credentials: false
+
+      # Untrusted input (title, commit subjects) only reaches the script via env and git, never ${{ }}
+      - name: Check the PR title and commit subjects
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          pattern='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9-]+\))?!?: [^ ]'
+          status=0
+          check() {
+            if [[ ! "$2" =~ $pattern ]]; then
+              echo "::error::$1 does not follow Conventional Commits, type(scope): subject: $2"
+              status=1
+            fi
+          }
+          check "PR title" "$TITLE"
+          while IFS= read -r subject; do
+            check "Commit" "$subject"
+          done < <(git log --no-merges --format=%s "$BASE..$HEAD")
+          exit $status
