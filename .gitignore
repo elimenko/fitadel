@@ -1,0 +1,57 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+tmp
+out-tsc
+coverage
+
+# Nx
+.nx/cache
+.nx/workspace-data
+.nx/polygraph
+.nx/self-healing
+.nx/migrate-runs
+
+# Logs
+*.log
+
+# Secrets: never commit. Commit *.example templates instead.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+!debug.keystore
+kubeconfig
+*.kubeconfig
+
+# Terraform: state may contain secrets and lives in a remote backend
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# Local notes (not versioned)
+/learning-principles/
+
+# Editors
+/.idea
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AI agents: local-only settings
+.claude/settings.local.json
+.claude/worktrees
