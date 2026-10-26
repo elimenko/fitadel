@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+    groups:
+      github-actions: { patterns: ['*'] }
+    commit-message: { prefix: ci }
+
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]
+    ignore:
+      # Nx is upgraded with `nx migrate`, which also runs code migrations
+      - dependency-name: nx
+      - dependency-name: '@nx/*'
+      # Nx 24 supports ESLint 9 only
+      - dependency-name: eslint
+        update-types: ['version-update:semver-major']
+    commit-message: { prefix: build }
