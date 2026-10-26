@@ -5,3 +5,5 @@ packages:
 allowBuilds:
   '@swc/core': true
   nx: true
+  '@parcel/watcher': false
+  unrs-resolver: false
