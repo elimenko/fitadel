@@ -22,3 +22,4 @@ Write it before significant work depends on the decision, not after the fact.
 | [0001](0001-record-architecture-decisions.md)    | Record architecture decisions                | Accepted |
 | [0002](0002-nx-monorepo-with-pnpm-workspaces.md) | Use an Nx monorepo with pnpm workspaces      | Accepted |
 | [0003](0003-bundler-module-resolution.md)        | Use bundler module resolution for TypeScript | Accepted |
+| [0004](0004-jest-unit-test-runner.md)            | Use Jest as the unit test runner             | Accepted |
