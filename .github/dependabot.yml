@@ -23,4 +23,7 @@ updates:
       # Nx 24 supports ESLint 9 only
       - dependency-name: eslint
         update-types: ['version-update:semver-major']
+      # Must match the Node.js major in .nvmrc; bumped together with it
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     commit-message: { prefix: build }
