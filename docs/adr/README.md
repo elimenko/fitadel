@@ -6,7 +6,7 @@ considered, the decision and its consequences.
 ## When to write one
 
 When a decision is expensive to reverse, or likely to raise the question "why?".
-Write it when the decision is made, not after the fact.
+Write it before significant work depends on the decision, not after the fact.
 
 ## How
 

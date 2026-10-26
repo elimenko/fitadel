@@ -8,7 +8,7 @@ UI/UX is designed mobile-first on every platform.
 ### Phase 0: Foundations
 
 - [x] Nx workspace, repository conventions
-- [ ] Architecture decision records
+- [x] Architecture decision records
 - [ ] CI with `nx affected`
 - [ ] Local infrastructure with Docker Compose
 
