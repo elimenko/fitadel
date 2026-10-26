@@ -18,6 +18,7 @@ UI/UX is designed mobile-first on every platform.
 - [ ] Import from Open Food Facts and USDA FoodData Central
 - [ ] Barcode lookup
 - [ ] Custom and manually entered foods
+- [ ] Observability baseline: OpenTelemetry instrumentation, local metrics/logs/traces stack
 
 ### Phase 2: Identity
 
@@ -29,6 +30,7 @@ UI/UX is designed mobile-first on every platform.
 - [ ] Goals with a deficit or surplus in % or kcal → daily calorie budget
 - [ ] Food diary with daily totals
 - [ ] Event-driven integration between services (Kafka)
+- [ ] Distributed tracing across services and Kafka; dashboards and alert rules
 
 ### Phase 4: Web
 
@@ -59,4 +61,5 @@ UI/UX is designed mobile-first on every platform.
 ### Phase 8: Production
 
 - [ ] Kubernetes on AWS (EKS), continuous delivery
-- [ ] Observability, security hardening, cost controls
+- [ ] Production monitoring and alerting (SLOs, notifications)
+- [ ] Security hardening, cost controls

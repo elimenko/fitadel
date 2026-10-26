@@ -22,6 +22,7 @@ ADRs in `docs/adr`.
 - **Data:** PostgreSQL, MongoDB, Redis
 - **Identity:** own OpenID Connect provider
 - **Infrastructure:** AWS, Terraform, Kubernetes, GitHub Actions
+- **Observability:** OpenTelemetry, Grafana, Prometheus, Loki, Tempo
 
 ## Getting started
 
