@@ -1,13 +1,30 @@
-import { Logger } from '@nestjs/common';
+// Must be the first import: see instrumentation.ts
+import { telemetry } from './instrumentation';
+
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app/app.module';
 import type { Env } from './config/env';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  // On SIGTERM: stop accepting requests, finish in-flight ones, run onModuleDestroy hooks
-  app.enableShutdownHooks();
+  // Buffer Nest's startup logs until the pino logger is ready
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const logger = app.get(Logger);
+  app.useLogger(logger);
+
+  // SIGTERM (Kubernetes, docker stop) or SIGINT (Ctrl+C): stop accepting requests,
+  // finish in-flight ones and close the database pool, then flush telemetry last,
+  // so the shutdown itself is still traced and logged.
+  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+    process.once(signal, async () => {
+      logger.log(`Received ${signal}, shutting down`);
+      await app.close();
+      await telemetry.shutdown();
+      process.exit(0);
+    });
+  }
+
   const config = app.get<ConfigService<Env, true>>(ConfigService);
   const port = config.get('PORT', { infer: true });
   await app.listen(port);
@@ -23,7 +40,7 @@ async function bootstrap() {
       // @nx/js isn't installed
     }
   }
-  Logger.log(`Catalog service is running on: http://localhost:${port}`);
+  logger.log(`Catalog service is running on: http://localhost:${port}`);
 }
 
 bootstrap();
