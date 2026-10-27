@@ -1,0 +1,37 @@
+-- Provisions the catalog service's database and roles. Idempotent: safe to re-run.
+-- Run through catalog.sh, which passes the passwords as psql variables.
+--
+--   catalog_migrator  owns the database and every object in it; runs migrations
+--   catalog_app       reads and writes rows only; used by the running service
+
+-- Postgres has no CREATE ROLE IF NOT EXISTS: build the statement, then \gexec runs it
+SELECT format('CREATE ROLE catalog_migrator LOGIN PASSWORD %L', :'migrator_password')
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'catalog_migrator') \gexec
+SELECT format('CREATE ROLE catalog_app LOGIN PASSWORD %L', :'app_password')
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'catalog_app') \gexec
+
+-- Keep passwords in sync with .env on re-runs
+ALTER ROLE catalog_migrator PASSWORD :'migrator_password';
+ALTER ROLE catalog_app PASSWORD :'app_password';
+
+-- Local only: prisma migrate dev creates a temporary shadow database
+ALTER ROLE catalog_migrator CREATEDB;
+
+-- CREATE DATABASE can't run in a transaction block (or a DO block), hence \gexec again
+SELECT 'CREATE DATABASE catalog OWNER catalog_migrator'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'catalog') \gexec
+
+REVOKE ALL ON DATABASE catalog FROM PUBLIC;
+GRANT CONNECT ON DATABASE catalog TO catalog_app;
+
+\connect catalog
+
+-- The database owner (catalog_migrator) owns schema public; nobody else may create in it
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO catalog_app;
+
+-- Grants on objects that catalog_migrator creates later, in future migrations
+ALTER DEFAULT PRIVILEGES FOR ROLE catalog_migrator IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO catalog_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE catalog_migrator IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO catalog_app;
