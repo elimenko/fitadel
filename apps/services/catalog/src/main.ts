@@ -1,16 +1,11 @@
-/**
- * This is not a production server yet!
- * This is only a minimal backend to get started.
- */
-
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const globalPrefix = 'api';
-  app.setGlobalPrefix(globalPrefix);
+  // On SIGTERM: stop accepting requests, finish in-flight ones, run onModuleDestroy hooks
+  app.enableShutdownHooks();
   const port = process.env.PORT || 3000;
   await app.listen(port);
   // Set when Nx waits for this server to be ready
@@ -25,9 +20,7 @@ async function bootstrap() {
       // @nx/js isn't installed
     }
   }
-  Logger.log(
-    `🚀 Application is running on: http://localhost:${port}/${globalPrefix}`,
-  );
+  Logger.log(`Catalog service is running on: http://localhost:${port}`);
 }
 
 bootstrap();
