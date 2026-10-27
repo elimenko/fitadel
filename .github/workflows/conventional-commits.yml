@@ -26,6 +26,8 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
+          # The Conventional Commits spec treats types and scopes as case-insensitive
+          shopt -s nocasematch
           pattern='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9-]+\))?!?: [^ ]'
           status=0
           check() {
