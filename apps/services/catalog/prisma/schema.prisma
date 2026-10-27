@@ -1,0 +1,96 @@
+// Catalog data model. Hand-written SQL in the migrations adds what Prisma can't express:
+// extensions, the search functions and expression indexes, and CHECK constraints.
+// See docs/adr/0006 and docs/adr/0007.
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  moduleFormat    = "cjs"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum FoodSource {
+  off
+  usda
+  user
+
+  @@map("food_source")
+}
+
+enum Visibility {
+  public
+  private
+
+  @@map("visibility")
+}
+
+/// Whether nutrient values are per 100 g or per 100 ml
+enum NutrientBasis {
+  g
+  ml
+
+  @@map("nutrient_basis")
+}
+
+model Food {
+  id              String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  source          FoodSource
+  /// Open Food Facts code or USDA fdc_id; NULL for user foods
+  sourceRef       String?       @map("source_ref")
+  /// Creator, who may edit the food. NULL for imported foods.
+  ownerId         String?       @map("owner_id") @db.Uuid
+  visibility      Visibility    @default(public)
+  /// The food a private copy was made from
+  basedOnId       String?       @map("based_on_id") @db.Uuid
+  basedOn         Food?         @relation("FoodCopies", fields: [basedOnId], references: [id])
+  copies          Food[]        @relation("FoodCopies")
+  /// Normalized GTIN
+  barcode         String?
+  /// Names by language, e.g. {"pl": "Twaróg półtłusty", "en": "Semi-skimmed quark"}
+  names           Json
+  brand           String?
+  basis           NutrientBasis @default(g)
+  /// Nutrients per 100 g or 100 ml. NULL means unknown, which is not the same as 0.
+  kcal            Decimal       @db.Decimal(6, 2)
+  protein         Decimal?      @db.Decimal(5, 2)
+  fat             Decimal?      @db.Decimal(5, 2)
+  carbs           Decimal?      @db.Decimal(5, 2)
+  sugars          Decimal?      @db.Decimal(5, 2)
+  fiber           Decimal?      @db.Decimal(5, 2)
+  saturatedFat    Decimal?      @map("saturated_fat") @db.Decimal(5, 2)
+  salt            Decimal?      @db.Decimal(5, 2)
+  /// Display-only nutrients (vitamins, minerals), keyed by Open Food Facts nutrient name
+  extraNutrients  Json?         @map("extra_nutrients")
+  sourceUpdatedAt DateTime?     @map("source_updated_at") @db.Timestamptz
+  /// Foods are never deleted, because diary entries refer to them
+  retiredAt       DateTime?     @map("retired_at") @db.Timestamptz
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+  servings        FoodServing[]
+
+  @@unique([source, sourceRef])
+  /// One public user food per barcode
+  @@unique([barcode], map: "food_public_user_barcode_key", where: raw("source = 'user' AND visibility = 'public'"))
+  /// One private copy per user and barcode
+  @@unique([ownerId, barcode], map: "food_private_owner_barcode_key", where: raw("visibility = 'private'"))
+  @@index([barcode])
+  // Search indexes are expression indexes on food_search_text(names, brand), in migration SQL
+  @@map("food")
+}
+
+/// A named portion, e.g. "1 kromka" = 25 g
+model FoodServing {
+  id     String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  foodId String  @map("food_id") @db.Uuid
+  food   Food    @relation(fields: [foodId], references: [id], onDelete: Cascade)
+  label  String
+  /// In the food's basis unit (g or ml)
+  amount Decimal @db.Decimal(7, 2)
+
+  @@index([foodId])
+  @@map("food_serving")
+}
