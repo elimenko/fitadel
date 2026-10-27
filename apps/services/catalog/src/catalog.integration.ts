@@ -9,9 +9,10 @@ import {
   PostgreSqlContainer,
   type StartedPostgreSqlContainer,
 } from '@testcontainers/postgresql';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { Client } from 'pg';
 
@@ -130,5 +131,61 @@ describe('service', () => {
     expect(await response.json()).toMatchObject({
       info: { database: { status: 'up' } },
     });
+  });
+});
+
+/** A port that is free right now (the OS picks it). */
+async function freePort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const { port } = server.address() as { port: number };
+  await new Promise((resolve) => server.close(resolve));
+  return port;
+}
+
+// Windows has no real POSIX signals: Node can't deliver SIGTERM to another process
+// there (it terminates it instead), so this runs on Linux only, e.g. in CI.
+const onPosix = process.platform === 'win32' ? describe.skip : describe;
+
+onPosix('shutdown', () => {
+  it('exits cleanly on SIGTERM', async () => {
+    const port = await freePort();
+    // The built bundle, run as a real process: what a container would run
+    const server = spawn(
+      process.execPath,
+      [join(projectRoot, 'dist/main.js')],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'production',
+          PORT: String(port),
+          DATABASE_URL: urls.app,
+          OTEL_SDK_DISABLED: 'true',
+        },
+      },
+    );
+    let output = '';
+    server.stdout.on('data', (chunk) => (output += chunk));
+    server.stderr.on('data', (chunk) => (output += chunk));
+    const exited = new Promise<number | null>((resolve) =>
+      server.on('exit', resolve),
+    );
+
+    // Wait until the server answers
+    for (let attempt = 0; ; attempt++) {
+      try {
+        if ((await fetch(`http://127.0.0.1:${port}/health/live`)).ok) break;
+      } catch {
+        // not listening yet
+      }
+      if (attempt > 100)
+        throw new Error(`Server didn't start:
+${output}`);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    server.kill('SIGTERM');
+    expect(await exited).toBe(0);
+    expect(output).toContain('Received SIGTERM, shutting down');
   });
 });
