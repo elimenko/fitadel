@@ -7,3 +7,4 @@ allowBuilds:
   nx: true
   '@parcel/watcher': false
   unrs-resolver: false
+  '@nestjs/core': false

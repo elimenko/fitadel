@@ -40,6 +40,17 @@
       "options": {
         "targetName": "test"
       }
+    },
+    {
+      "plugin": "@nx/webpack/plugin",
+      "options": {
+        "buildTargetName": "build",
+        "serveTargetName": "serve",
+        "previewTargetName": "preview",
+        "buildDepsTargetName": "build-deps",
+        "watchDepsTargetName": "watch-deps",
+        "serveStaticTargetName": "serve-static"
+      }
     }
   ],
   "generators": {
@@ -47,6 +58,11 @@
       "bundler": "none",
       "linter": "eslint",
       "unitTestRunner": "jest"
+    },
+    "@nx/nest:application": {
+      "linter": "eslint",
+      "unitTestRunner": "jest",
+      "e2eTestRunner": "none"
     }
   },
   "analytics": false,
