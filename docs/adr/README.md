@@ -25,3 +25,4 @@ Write it before significant work depends on the decision, not after the fact.
 | [0004](0004-jest-unit-test-runner.md)            | Use Jest as the unit test runner                                 | Accepted |
 | [0005](0005-postgresql-primary-database.md)      | Use PostgreSQL as the primary database                           | Accepted |
 | [0006](0006-postgresql-catalog-search.md)        | Use PostgreSQL trigram and full-text search for the food catalog | Accepted |
+| [0007](0007-prisma-database-access.md)           | Use Prisma for database access and migrations                    | Accepted |
