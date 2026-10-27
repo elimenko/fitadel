@@ -39,7 +39,7 @@ jobs:
 
       - run: pnpm exec prettier --check .
       - run: pnpm nx sync:check
-      - run: pnpm nx affected -t lint test typecheck build
+      - run: pnpm nx affected -t lint test typecheck build --output-style=static
 
   integration:
     name: Integration tests
@@ -64,4 +64,4 @@ jobs:
       - uses: nrwl/nx-set-shas@e602fada7ad5987b0f7b1905e7a99ea1c661514c # v5.1.0
 
       # Testcontainers starts throwaway Postgres containers on the runner's Docker
-      - run: pnpm nx affected -t integration
+      - run: pnpm nx affected -t integration --output-style=static
