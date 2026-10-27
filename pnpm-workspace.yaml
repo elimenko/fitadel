@@ -8,3 +8,7 @@ allowBuilds:
   '@parcel/watcher': false
   unrs-resolver: false
   '@nestjs/core': false
+  # Downloads the schema engine binary used by prisma migrate
+  '@prisma/engines': true
+  # preinstall only checks the Node.js version
+  prisma: false

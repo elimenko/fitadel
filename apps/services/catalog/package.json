@@ -77,7 +77,60 @@
       "test": {
         "options": {
           "passWithNoTests": true
+        },
+        "dependsOn": [
+          "prisma-generate",
+          "^build"
+        ]
+      },
+      "prisma-generate": {
+        "command": "prisma generate",
+        "options": {
+          "cwd": "{projectRoot}",
+          "env": {
+            "CHECKPOINT_DISABLE": "1"
+          }
+        },
+        "cache": true,
+        "inputs": [
+          "{projectRoot}/prisma/schema.prisma",
+          "{projectRoot}/prisma.config.ts",
+          {
+            "externalDependencies": [
+              "prisma"
+            ]
+          }
+        ],
+        "outputs": [
+          "{projectRoot}/src/generated/prisma"
+        ]
+      },
+      "prisma": {
+        "command": "prisma",
+        "options": {
+          "cwd": "{projectRoot}",
+          "env": {
+            "CHECKPOINT_DISABLE": "1"
+          },
+          "forwardAllArgs": true
         }
+      },
+      "build": {
+        "dependsOn": [
+          "prisma-generate",
+          "^build"
+        ]
+      },
+      "typecheck": {
+        "dependsOn": [
+          "prisma-generate",
+          "^typecheck"
+        ]
+      },
+      "lint": {
+        "dependsOn": [
+          "prisma-generate"
+        ]
       }
     },
     "tags": [
@@ -90,6 +143,9 @@
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
     "@nestjs/terminus": "^12.1.0",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "pg": "^8.23.1",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0",
     "tslib": "^2.3.0",
