@@ -34,6 +34,16 @@ pnpm install
 pnpm nx graph   # explore the project graph
 ```
 
+### Local infrastructure
+
+Backing services (PostgreSQL) run in Docker. Prerequisite: Docker with Compose v2.
+
+```sh
+cp .env.example .env    # then adjust the values
+docker compose up -d    # start, wait for "healthy" in docker compose ps
+docker compose down     # stop; add -v to also delete the data volume
+```
+
 ## Repository layout
 
 ```

@@ -17,6 +17,8 @@ versioned files, commit messages or pull requests.
 - Inspect: `pnpm nx show projects`, `pnpm nx graph`
 - After adding a dependency between projects: `pnpm nx sync`
 - Format: `pnpm exec prettier --write <files>`
+- Local infrastructure: `docker compose up -d` / `docker compose down` (needs `.env`,
+  copied from `.env.example`)
 
 ## Repository layout
 
