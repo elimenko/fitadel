@@ -26,5 +26,23 @@ services:
       retries: 10
       start_period: 10s
 
+  # Development-only observability backend in one container: OpenTelemetry Collector,
+  # Prometheus (metrics), Loki (logs), Tempo (traces) and Grafana. Services send OTLP to it.
+  lgtm:
+    image: grafana/otel-lgtm:0.38.1@sha256:0df9bc14142000b161344bd24caf6ddd319b7319055aedaf9b0692b125730af7
+    environment:
+      # Local only (ports bound to 127.0.0.1): skip the Grafana login
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: 'true'
+    ports:
+      - '127.0.0.1:3001:3000' # Grafana UI (3000 is the catalog service)
+      - '127.0.0.1:4317:4317' # OTLP gRPC
+      - '127.0.0.1:4318:4318' # OTLP HTTP
+    volumes:
+      - lgtm-data:/data
+      - ./tools/observability/grafana-datasources.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/grafana-datasources.yaml:ro
+
 volumes:
   postgres-data:
+  lgtm-data:
