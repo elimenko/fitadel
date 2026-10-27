@@ -19,7 +19,7 @@ ADRs in `docs/adr`.
 - **Web:** React micro-frontends with Module Federation (Rspack)
 - **Mobile:** React Native (Android first)
 - **Backend:** NestJS microservices, gRPC (sync), Kafka (async)
-- **Data:** PostgreSQL, MongoDB, Redis
+- **Data:** PostgreSQL, Redis
 - **Identity:** own OpenID Connect provider
 - **Infrastructure:** AWS, Terraform, Kubernetes, GitHub Actions
 - **Observability:** OpenTelemetry, Grafana, Prometheus, Loki, Tempo
