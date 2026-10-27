@@ -17,10 +17,11 @@ Write it before significant work depends on the decision, not after the fact.
 
 ## Index
 
-| ADR                                              | Title                                        | Status   |
-| ------------------------------------------------ | -------------------------------------------- | -------- |
-| [0001](0001-record-architecture-decisions.md)    | Record architecture decisions                | Accepted |
-| [0002](0002-nx-monorepo-with-pnpm-workspaces.md) | Use an Nx monorepo with pnpm workspaces      | Accepted |
-| [0003](0003-bundler-module-resolution.md)        | Use bundler module resolution for TypeScript | Accepted |
-| [0004](0004-jest-unit-test-runner.md)            | Use Jest as the unit test runner             | Accepted |
-| [0005](0005-postgresql-primary-database.md)      | Use PostgreSQL as the primary database       | Accepted |
+| ADR                                              | Title                                                            | Status   |
+| ------------------------------------------------ | ---------------------------------------------------------------- | -------- |
+| [0001](0001-record-architecture-decisions.md)    | Record architecture decisions                                    | Accepted |
+| [0002](0002-nx-monorepo-with-pnpm-workspaces.md) | Use an Nx monorepo with pnpm workspaces                          | Accepted |
+| [0003](0003-bundler-module-resolution.md)        | Use bundler module resolution for TypeScript                     | Accepted |
+| [0004](0004-jest-unit-test-runner.md)            | Use Jest as the unit test runner                                 | Accepted |
+| [0005](0005-postgresql-primary-database.md)      | Use PostgreSQL as the primary database                           | Accepted |
+| [0006](0006-postgresql-catalog-search.md)        | Use PostgreSQL trigram and full-text search for the food catalog | Accepted |
