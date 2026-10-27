@@ -6,6 +6,9 @@ export const envSchema = z.object({
     .enum(['development', 'test', 'production'])
     .default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  LOG_LEVEL: z
+    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
+    .default('info'),
   /** Runtime connection, as the catalog_app role */
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
 });
