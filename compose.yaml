@@ -8,11 +8,16 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-fitadel}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}
       POSTGRES_DB: ${POSTGRES_DB:-fitadel}
+      # Service roles, created by tools/db/*.sh
+      CATALOG_MIGRATOR_PASSWORD: ${CATALOG_MIGRATOR_PASSWORD:?Set CATALOG_MIGRATOR_PASSWORD in .env (see .env.example)}
+      CATALOG_APP_PASSWORD: ${CATALOG_APP_PASSWORD:?Set CATALOG_APP_PASSWORD in .env (see .env.example)}
     ports:
       - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
     volumes:
       # Postgres 18+ images keep PGDATA under /var/lib/postgresql/<major>/docker
       - postgres-data:/var/lib/postgresql
+      # Runs *.sh on first start with an empty volume only (*.psql files are ignored)
+      - ./tools/db:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test:
         ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
