@@ -36,12 +36,30 @@ pnpm nx graph   # explore the project graph
 
 ### Local infrastructure
 
-Backing services (PostgreSQL) run in Docker. Prerequisite: Docker with Compose v2.
+Backing services run in Docker: PostgreSQL, and an observability stack
+([grafana/otel-lgtm](https://github.com/grafana/docker-otel-lgtm)) that receives
+OpenTelemetry data. Prerequisite: Docker with Compose v2.
 
 ```sh
 cp .env.example .env    # then adjust the values
 docker compose up -d    # start, wait for "healthy" in docker compose ps
-docker compose down     # stop; add -v to also delete the data volume
+docker compose down     # stop; add -v to also delete the data volumes
+```
+
+Grafana runs at http://localhost:3001, with traces (Tempo), metrics (Prometheus)
+and logs (Loki) from the services.
+
+A fresh data volume provisions each service's database and roles on first start
+([tools/db](tools/db)). For an existing volume, run a service's script once, e.g.
+`docker compose exec postgres bash /docker-entrypoint-initdb.d/catalog.sh`.
+
+### Running a service
+
+```sh
+cp apps/services/catalog/.env.example apps/services/catalog/.env
+pnpm nx run catalog:prisma migrate deploy   # apply database migrations
+pnpm nx serve catalog                       # http://localhost:3000/health/ready
+pnpm nx run catalog:integration             # integration tests (needs Docker)
 ```
 
 ## Repository layout
