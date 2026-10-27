@@ -10,7 +10,7 @@ UI/UX is designed mobile-first on every platform.
 - [x] Nx workspace, repository conventions
 - [x] Architecture decision records
 - [x] CI with `nx affected`
-- [ ] Local infrastructure with Docker Compose
+- [x] Local infrastructure with Docker Compose
 
 ### Phase 1: Food catalog
 
