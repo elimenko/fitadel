@@ -19,7 +19,7 @@ ADRs in `docs/adr`.
 - **Web:** React micro-frontends with Module Federation (Rspack)
 - **Mobile:** React Native (Android first)
 - **Backend:** NestJS microservices, gRPC (sync), Kafka (async)
-- **Data:** PostgreSQL, MongoDB, Redis
+- **Data:** PostgreSQL, Redis
 - **Identity:** own OpenID Connect provider
 - **Infrastructure:** AWS, Terraform, Kubernetes, GitHub Actions
 - **Observability:** OpenTelemetry, Grafana, Prometheus, Loki, Tempo
@@ -32,6 +32,16 @@ pinned version).
 ```sh
 pnpm install
 pnpm nx graph   # explore the project graph
+```
+
+### Local infrastructure
+
+Backing services (PostgreSQL) run in Docker. Prerequisite: Docker with Compose v2.
+
+```sh
+cp .env.example .env    # then adjust the values
+docker compose up -d    # start, wait for "healthy" in docker compose ps
+docker compose down     # stop; add -v to also delete the data volume
 ```
 
 ## Repository layout
