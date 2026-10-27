@@ -33,6 +33,7 @@
     "@swc/core": "1.16.18",
     "@swc/helpers": "0.5.23",
     "@swc/jest": "~0.2.38",
+    "@testcontainers/postgresql": "12.2.1",
     "@types/jest": "~30.0.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.23.1",

@@ -131,6 +131,32 @@
         "dependsOn": [
           "prisma-generate"
         ]
+      },
+      "integration": {
+        "command": "jest --config jest.integration.config.cts",
+        "options": {
+          "cwd": "{projectRoot}",
+          "env": {
+            "NODE_OPTIONS": "--experimental-vm-modules"
+          }
+        },
+        "dependsOn": [
+          "prisma-generate",
+          "^build"
+        ],
+        "cache": true,
+        "inputs": [
+          "default",
+          "^production",
+          "{workspaceRoot}/tools/db/**",
+          "{workspaceRoot}/compose.yaml",
+          {
+            "externalDependencies": [
+              "@testcontainers/postgresql",
+              "prisma"
+            ]
+          }
+        ]
       }
     },
     "tags": [

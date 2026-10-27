@@ -21,7 +21,9 @@
     "src/**/*.test.ts",
     "eslint.config.js",
     "eslint.config.cjs",
-    "eslint.config.mjs"
+    "eslint.config.mjs",
+    "src/**/*.integration.ts",
+    "jest.integration.config.cts"
   ],
   "references": []
 }

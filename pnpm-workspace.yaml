@@ -12,3 +12,8 @@ allowBuilds:
   '@prisma/engines': true
   # preinstall only checks the Node.js version
   prisma: false
+  # Testcontainers' Docker client (SSH transport): optional native addons, pure-JS fallbacks
+  cpu-features: false
+  ssh2: false
+  # postinstall only prints a version-scheme warning
+  protobufjs: false
