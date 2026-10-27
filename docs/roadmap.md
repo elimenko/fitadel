@@ -18,7 +18,7 @@ UI/UX is designed mobile-first on every platform.
 - [ ] Import from Open Food Facts and USDA FoodData Central
 - [ ] Barcode lookup
 - [ ] Custom and manually entered foods
-- [ ] Observability baseline: OpenTelemetry instrumentation, local metrics/logs/traces stack
+- [x] Observability baseline: OpenTelemetry instrumentation, local metrics/logs/traces stack
 
 ### Phase 2: Identity
 
