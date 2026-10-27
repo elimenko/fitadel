@@ -4,13 +4,25 @@
   "license": "MIT",
   "scripts": {},
   "private": true,
-  "dependencies": {},
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "reflect-metadata": "^0.2.0",
+    "rxjs": "^7.8.0"
+  },
   "devDependencies": {
     "@eslint/js": "^9.8.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@nestjs/testing": "^11.0.0",
     "@nx/eslint": "24.0.0",
     "@nx/eslint-plugin": "24.0.0",
     "@nx/jest": "24.0.0",
     "@nx/js": "24.0.0",
+    "@nx/nest": "24.0.0",
+    "@nx/node": "24.0.0",
+    "@nx/web": "24.0.0",
+    "@nx/webpack": "24.0.0",
     "@swc-node/register": "1.12.1",
     "@swc/core": "1.16.18",
     "@swc/helpers": "0.5.23",
@@ -27,7 +39,10 @@
     "ts-node": "10.9.2",
     "tslib": "^2.3.0",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.58.0"
+    "typescript-eslint": "^8.58.0",
+    "webpack": "~5.112.2",
+    "webpack-cli": "^7.0.0",
+    "webpack-dev-server": "^5.2.1"
   },
   "packageManager": "pnpm@12.15.0"
 }
