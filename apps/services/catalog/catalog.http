@@ -1,0 +1,74 @@
+# Requests against a locally running catalog service (`pnpm nx serve catalog`).
+# Run them with the REST Client extension in VS Code (humao.rest-client) or the
+# HTTP Client in JetBrains IDEs: click "Send Request" above a request.
+# The same endpoints are in Swagger UI: http://localhost:3000/docs
+
+@baseUrl = http://localhost:3000
+
+### Liveness: is the process up? (never checks the database)
+GET {{baseUrl}}/health/live
+
+### Readiness: can it serve requests? (checks the database; 503 when Postgres is down)
+GET {{baseUrl}}/health/ready
+
+# ---------------------------------------------------------------------------------
+# Barcode lookup: GET /v1/foods/barcode/{code}
+# ---------------------------------------------------------------------------------
+
+### Alpro almond drink: imported from the Open Food Facts export (not tagged Poland)
+GET {{baseUrl}}/v1/foods/barcode/5411188110835
+Accept-Language: en
+
+### Finuu butter, with a Russian UI: no Russian name, so the Polish one is shown
+GET {{baseUrl}}/v1/foods/barcode/5900012005947
+Accept-Language: ru-RU,ru;q=0.9,en;q=0.8
+
+### Finuu with a digit missing: 400, the check digit doesn't match
+GET {{baseUrl}}/v1/foods/barcode/590012005947
+
+### Optimum Nutrition whey: not in the export; the first scan fetches it from the
+### Open Food Facts API and stores it, later scans are database hits (compare the times)
+GET {{baseUrl}}/v1/foods/barcode/5060751998501
+
+### Not a barcode at all: 400 with the invalid field
+GET {{baseUrl}}/v1/foods/barcode/abc
+
+### A valid barcode nobody has (EAN-8 example): 404; Open Food Facts isn't asked
+### again for a day
+GET {{baseUrl}}/v1/foods/barcode/96385074
+
+# ---------------------------------------------------------------------------------
+# Search: GET /v1/foods?q=...&limit=20&offset=0
+# ---------------------------------------------------------------------------------
+
+### Polish, without Polish characters
+GET {{baseUrl}}/v1/foods?q=twarog wiejski&limit=5
+
+### A partly typed word
+GET {{baseUrl}}/v1/foods?q=serek wiej&limit=5
+
+### A typo
+GET {{baseUrl}}/v1/foods?q=mlekko&limit=5
+
+### Russian: products sold in Poland with Russian names come first
+GET {{baseUrl}}/v1/foods?q=творог&limit=5
+Accept-Language: ru
+
+### A very common word: the slowest kind of query (every match is scored)
+GET {{baseUrl}}/v1/foods?q=whey protein&limit=5
+
+### The next page: pass the previous response's nextOffset as offset
+GET {{baseUrl}}/v1/foods?q=mleko&limit=5&offset=5
+
+### Too short: 400
+GET {{baseUrl}}/v1/foods?q=a
+
+# ---------------------------------------------------------------------------------
+# Docs and errors
+# ---------------------------------------------------------------------------------
+
+### The OpenAPI description (JSON)
+GET {{baseUrl}}/docs/openapi.json
+
+### An unknown route: 404 as RFC 9457 problem details (application/problem+json)
+GET {{baseUrl}}/v1/nothing-here

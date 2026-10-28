@@ -28,6 +28,8 @@ pnpm nx serve catalog                       # http://localhost:3000/health/ready
 
 API docs: Swagger UI at http://localhost:3000/docs (not in production), the OpenAPI
 description in [openapi.json](openapi.json). Errors use RFC 9457 problem details.
+Ready-made requests: [catalog.http](catalog.http) (VS Code REST Client, JetBrains HTTP
+Client).
 
 ## Barcode lookup
 
