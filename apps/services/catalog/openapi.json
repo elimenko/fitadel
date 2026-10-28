@@ -385,6 +385,78 @@
         "tags": ["health"]
       }
     },
+    "/v1/foods": {
+      "get": {
+        "operationId": "FoodController_search_v1",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "Chooses the display name, e.g. \"ru-RU,ru;q=0.9,en;q=0.8\"",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "description": "Words or the start of words, in any language; accents optional",
+            "schema": {
+              "minLength": 2,
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "maximum": 1000,
+              "default": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of matching foods",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResultDto_Output"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["foods"]
+      }
+    },
     "/v1/foods/barcode/{code}": {
       "get": {
         "operationId": "FoodController_findByBarcode_v1",
@@ -644,6 +716,34 @@
           "servings",
           "countries"
         ],
+        "additionalProperties": false
+      },
+      "SearchResultDto_Output": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Food_Output"
+            },
+            "description": "Foods sold in Poland first, then by match quality and popularity"
+          },
+          "nextOffset": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as offset for the next page; null on the last page. There is no total count: counting every match would be as slow as the slowest search."
+          }
+        },
+        "required": ["items", "nextOffset"],
+        "description": "A page of search results",
         "additionalProperties": false
       },
       "BarcodeLookupDto_Output": {
