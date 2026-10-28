@@ -1,5 +1,5 @@
 {
-  "openapi": "3.0.0",
+  "openapi": "3.1.0",
   "paths": {
     "/health/live": {
       "get": {
@@ -384,6 +384,65 @@
         },
         "tags": ["health"]
       }
+    },
+    "/v1/foods/barcode/{code}": {
+      "get": {
+        "operationId": "FoodController_findByBarcode_v1",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "Chooses the display name, e.g. \"ru-RU,ru;q=0.9,en;q=0.8\"",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "description": "EAN-8, UPC-A, EAN-13 or GTIN-14, as printed",
+            "schema": {
+              "pattern": "^\\d{8,14}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The best match, plus alternatives",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BarcodeLookupDto_Output"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a valid barcode (wrong length, or a mistyped digit)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No food with this barcode",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["foods"]
+      }
     }
   },
   "info": {
@@ -395,6 +454,217 @@
   "tags": [],
   "servers": [],
   "components": {
-    "schemas": {}
+    "schemas": {
+      "ProblemDetailsDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "errors": {
+            "description": "Validation errors, one per invalid field",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": ["path", "message"]
+            }
+          }
+        },
+        "required": ["type", "title", "status", "instance"],
+        "description": "RFC 9457 problem details"
+      },
+      "Food_Output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "source": {
+            "type": "string",
+            "enum": ["off", "usda", "user"],
+            "description": "off = Open Food Facts, user = entered by a user"
+          },
+          "sourceRef": {
+            "description": "The id at the source, e.g. the Open Food Facts code",
+            "type": ["string", "null"]
+          },
+          "barcode": {
+            "description": "GTIN-14: 14 digits, zero-padded",
+            "type": ["string", "null"]
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name: the first Accept-Language with a name, else Polish, English or any"
+          },
+          "names": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "All names by language code, e.g. { \"pl\": \"Twaróg\" }"
+          },
+          "brand": {
+            "type": ["string", "null"]
+          },
+          "basis": {
+            "type": "string",
+            "enum": ["g", "ml"],
+            "description": "Nutrient values are per 100 g or per 100 ml"
+          },
+          "per100": {
+            "type": "object",
+            "properties": {
+              "kcal": {
+                "type": "number"
+              },
+              "protein": {
+                "description": "Grams; null when unknown (not 0)",
+                "type": ["number", "null"]
+              },
+              "fat": {
+                "description": "Grams; null when unknown (not 0)",
+                "type": ["number", "null"]
+              },
+              "carbs": {
+                "description": "Grams; null when unknown (not 0)",
+                "type": ["number", "null"]
+              },
+              "sugars": {
+                "description": "Grams; null when unknown (not 0)",
+                "type": ["number", "null"]
+              },
+              "fiber": {
+                "description": "Grams; null when unknown (not 0)",
+                "type": ["number", "null"]
+              },
+              "saturatedFat": {
+                "description": "Grams; null when unknown (not 0)",
+                "type": ["number", "null"]
+              },
+              "salt": {
+                "description": "Grams; null when unknown (not 0)",
+                "type": ["number", "null"]
+              }
+            },
+            "required": [
+              "kcal",
+              "protein",
+              "fat",
+              "carbs",
+              "sugars",
+              "fiber",
+              "saturatedFat",
+              "salt"
+            ],
+            "additionalProperties": false
+          },
+          "otherNutrients": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "number"
+                },
+                "unit": {
+                  "type": "string"
+                }
+              },
+              "required": ["value", "unit"],
+              "additionalProperties": false
+            },
+            "description": "Vitamins, minerals etc. per 100 g or 100 ml, for display"
+          },
+          "servings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "number",
+                  "description": "In the basis unit (g or ml)"
+                }
+              },
+              "required": ["label", "amount"],
+              "additionalProperties": false
+            }
+          },
+          "countries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Where it is sold, e.g. [\"poland\", \"ireland\"]"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "sourceRef",
+          "barcode",
+          "name",
+          "names",
+          "brand",
+          "basis",
+          "per100",
+          "otherNutrients",
+          "servings",
+          "countries"
+        ],
+        "additionalProperties": false
+      },
+      "BarcodeLookupDto_Output": {
+        "type": "object",
+        "properties": {
+          "food": {
+            "description": "The best match",
+            "$ref": "#/components/schemas/Food_Output"
+          },
+          "alternatives": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Food_Output"
+            },
+            "description": "Other foods with this barcode, best first"
+          }
+        },
+        "required": ["food", "alternatives"],
+        "description": "A barcode lookup result",
+        "additionalProperties": false
+      }
+    }
   }
 }
