@@ -1,5 +1,5 @@
 import { kcalFromMacros } from '@fitadel/shared-nutrition';
-import { toGtin14 } from './barcode';
+import { toGtin14 } from '../food/barcode';
 
 /** The fields we read from an Open Food Facts product (JSONL dump or API). */
 export interface OffProduct {

@@ -24,6 +24,8 @@ export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
         'problem details (application/problem+json).',
     )
     .setVersion('1')
+    // 3.1 uses standard JSON Schema, which is what zod emits (e.g. type: ["number", "null"])
+    .setOpenAPIVersion('3.1.0')
     .build();
   return cleanupOpenApiDoc(SwaggerModule.createDocument(app, config));
 }

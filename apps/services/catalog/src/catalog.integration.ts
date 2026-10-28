@@ -17,6 +17,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { Client, Pool } from 'pg';
+import type { BarcodeLookupDto } from './food/food.dto';
+import type { ProblemDetails } from './http/problem-details.filter';
 import { importOffDump } from './import/off-import';
 
 const workspaceRoot = join(__dirname, '../../../..');
@@ -321,6 +323,78 @@ describe('service', () => {
       title: 'Not Found',
       status: 404,
       instance: '/v1/unknown',
+    });
+  });
+
+  // Uses the foods the import tests left behind: Twaróg (active), Boisson (retired)
+  describe('GET /v1/foods/barcode/:code', () => {
+    const get = async (code: string, language?: string) => {
+      const response = await fetch(
+        `${await app.getUrl()}/v1/foods/barcode/${code}`,
+        {
+          headers: language ? { 'Accept-Language': language } : {},
+        },
+      );
+      // Either a lookup (200) or problem details (4xx); the assertions check which
+      const body = (await response.json()) as BarcodeLookupDto & ProblemDetails;
+      return { response, body };
+    };
+
+    it('finds a food by its printed barcode, with a display-name fallback', async () => {
+      const { response, body } = await get('5900512300108', 'ru-RU,ru;q=0.9');
+      expect(response.status).toBe(200);
+      expect(response.headers.get('vary')).toMatch(/Accept-Language/i);
+      expect(body).toMatchObject({
+        food: {
+          source: 'off',
+          barcode: '05900512300108',
+          // No Russian name: falls back to Polish
+          name: 'Twaróg półtłusty',
+          names: { pl: 'Twaróg półtłusty' },
+          basis: 'g',
+          per100: { kcal: 133, protein: 18, fat: 4, carbs: 3.5, fiber: null },
+          servings: [{ label: '1 porcja (50 g)', amount: 50 }],
+          countries: ['poland'],
+        },
+        alternatives: [],
+      });
+    });
+
+    it('prefers a community food and offers the import as an alternative', async () => {
+      const client = new Client({ connectionString: urls.app });
+      await client.connect();
+      try {
+        await client.query(
+          `INSERT INTO food (source, barcode, names, kcal, updated_at)
+           VALUES ('user', '05900512300108', '{"pl": "Twaróg", "ru": "Творог"}', 130, now())`,
+        );
+        const { body } = await get('5900512300108', 'ru');
+        expect(body.food).toMatchObject({ source: 'user', name: 'Творог' });
+        expect(body.alternatives).toMatchObject([
+          { source: 'off', sourceRef: '5900512300108' },
+        ]);
+      } finally {
+        await client.query("DELETE FROM food WHERE source = 'user'");
+        await client.end();
+      }
+    });
+
+    it("doesn't return retired foods", async () => {
+      expect((await get('5449000000996')).response.status).toBe(404);
+    });
+
+    it('explains a mistyped barcode (check digit mismatch)', async () => {
+      const { response, body } = await get('590012005947');
+      expect(response.status).toBe(400);
+      expect(body.detail).toMatch(/check digit/);
+    });
+
+    it('names the invalid field when the input is not a barcode', async () => {
+      const { response, body } = await get('abc');
+      expect(response.status).toBe(400);
+      expect(body.errors).toEqual([
+        { path: 'code', message: 'A barcode has 8 to 14 digits' },
+      ]);
     });
   });
 });
