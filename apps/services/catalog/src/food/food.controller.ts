@@ -5,6 +5,7 @@ import {
   Headers,
   NotFoundException,
   Param,
+  Query,
   Res,
 } from '@nestjs/common';
 import {
@@ -22,6 +23,8 @@ import {
   BarcodeLookupDto,
   BarcodeParamsDto,
   ProblemDetailsDto,
+  SearchQueryDto,
+  SearchResultDto,
 } from './food.dto';
 import { FoodService } from './food.service';
 
@@ -47,6 +50,27 @@ const problem = (status: number, description: string) =>
 @Controller({ path: 'foods', version: '1' })
 export class FoodController {
   constructor(private readonly foods: FoodService) {}
+
+  @Get()
+  @ZodResponse({
+    status: 200,
+    type: SearchResultDto,
+    description: 'A page of matching foods',
+  })
+  @problem(400, 'Invalid query parameters')
+  async search(
+    @Query() { q, limit, offset }: SearchQueryDto,
+    @Headers('accept-language') acceptLanguage: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    response.vary('Accept-Language');
+    return this.foods.search(
+      q,
+      preferredLanguages(acceptLanguage),
+      limit,
+      offset,
+    );
+  }
 
   @Get('barcode/:code')
   @ZodResponse({

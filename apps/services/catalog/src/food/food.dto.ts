@@ -77,6 +77,44 @@ export class BarcodeParamsDto extends createZodDto(
   }),
 ) {}
 
+/** Deep offsets get slower; nobody pages that far through food search */
+const MAX_OFFSET = 1000;
+
+export class SearchQueryDto extends createZodDto(
+  z.object({
+    q: z
+      .string()
+      .trim()
+      .min(2, 'Type at least 2 characters')
+      .max(100)
+      .describe(
+        'Words or the start of words, in any language; accents optional',
+      ),
+    // Query parameters arrive as strings
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    offset: z.coerce.number().int().min(0).max(MAX_OFFSET).default(0),
+  }),
+) {}
+
+export const SearchResultSchema = z
+  .object({
+    items: z
+      .array(FoodSchema)
+      .describe(
+        'Foods sold in Poland first, then by match quality and popularity',
+      ),
+    nextOffset: z
+      .number()
+      .int()
+      .nullable()
+      .describe(
+        'Pass as offset for the next page; null on the last page. There is no total count: counting every match would be as slow as the slowest search.',
+      ),
+  })
+  .describe('A page of search results');
+
+export class SearchResultDto extends createZodDto(SearchResultSchema) {}
+
 export const ProblemDetailsSchema = z
   .object({
     type: z.string(),

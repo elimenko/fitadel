@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { Client, Pool } from 'pg';
-import type { BarcodeLookupDto } from './food/food.dto';
+import type { BarcodeLookupDto, SearchResultDto } from './food/food.dto';
 import type { ProblemDetails } from './http/problem-details.filter';
 import { importOffDump } from './import/off-import';
 import { WHEY_BARCODE, wheyProtein } from './off/off-api-product.fixture';
@@ -508,6 +508,73 @@ describe('service', () => {
           await pool.end();
         }
       });
+    });
+  });
+
+  describe('GET /v1/foods (search)', () => {
+    const search = async (query: string) => {
+      const response = await fetch(`${await app.getUrl()}/v1/foods?${query}`);
+      const body = (await response.json()) as SearchResultDto & ProblemDetails;
+      return { response, body };
+    };
+    const names = (body: SearchResultDto) =>
+      body.items.map((food) => food.name);
+
+    // A popular German food and two less popular Polish ones, all with the same name
+    beforeAll(async () => {
+      const client = new Client({ connectionString: urls.app });
+      await client.connect();
+      try {
+        await client.query(`
+          INSERT INTO food (source, source_ref, names, countries, popularity, kcal, updated_at) VALUES
+            ('off', 'search-de', '{"de": "Mleko testowe DE"}', '{germany}', 100, 60, now()),
+            ('off', 'search-pl', '{"pl": "Mleko testowe PL"}', '{poland}', 0, 60, now()),
+            ('off', 'search-pl2', '{"pl": "Mleko testowe zwykłe"}', '{poland}', 5, 60, now())`);
+      } finally {
+        await client.end();
+      }
+    });
+
+    it('ranks foods sold in Poland first, then by popularity', async () => {
+      const { response, body } = await search('q=mleko%20testowe');
+      expect(response.status).toBe(200);
+      expect(names(body)).toEqual([
+        'Mleko testowe zwykłe',
+        'Mleko testowe PL',
+        'Mleko testowe DE',
+      ]);
+      expect(body.nextOffset).toBeNull();
+    });
+
+    it('finds partly typed words and ignores Polish characters', async () => {
+      expect(names((await search('q=testow%20zwykle')).body)).toEqual([
+        'Mleko testowe zwykłe',
+      ]);
+    });
+
+    it('pages through the results without overlap', async () => {
+      const first = (await search('q=mleko%20testowe&limit=2')).body;
+      expect(first.nextOffset).toBe(2);
+      const second = (await search('q=mleko%20testowe&limit=2&offset=2')).body;
+      expect(second.nextOffset).toBeNull();
+      expect([...names(first), ...names(second)]).toEqual([
+        'Mleko testowe zwykłe',
+        'Mleko testowe PL',
+        'Mleko testowe DE',
+      ]);
+    });
+
+    it("doesn't return retired foods", async () => {
+      expect((await search('q=boisson')).body.items).toEqual([]);
+    });
+
+    it('rejects queries that are too short or pages that are too large', async () => {
+      const short = await search('q=a');
+      expect(short.response.status).toBe(400);
+      expect(short.body.errors).toEqual([
+        { path: 'q', message: 'Type at least 2 characters' },
+      ]);
+      expect((await search('q=mleko&limit=500')).response.status).toBe(400);
     });
   });
 });

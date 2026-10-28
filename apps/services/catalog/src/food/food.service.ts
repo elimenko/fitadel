@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { rankBarcodeMatches } from './barcode-ranking';
-import type { BarcodeLookupDto } from './food.dto';
+import { FoodSearch } from './food-search';
+import type { BarcodeLookupDto, SearchResultDto } from './food.dto';
 import { toFood } from './food.mapper';
 import { OffLookupService } from './off-lookup.service';
 
@@ -10,7 +11,37 @@ export class FoodService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly offLookup: OffLookupService,
+    private readonly foodSearch: FoodSearch,
   ) {}
+
+  /** A page of foods matching the text, best first */
+  async search(
+    text: string,
+    languages: string[],
+    limit: number,
+    offset: number,
+  ): Promise<SearchResultDto> {
+    // One extra row tells whether there's a next page, without counting all matches
+    const ids = await this.foodSearch.search({
+      text,
+      limit: limit + 1,
+      offset,
+    });
+    const page = ids.slice(0, limit);
+    const rows = await this.prisma.food.findMany({
+      where: { id: { in: page } },
+      include: { servings: true },
+    });
+    // findMany doesn't keep the search order
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return {
+      items: page.flatMap((id) => {
+        const row = byId.get(id);
+        return row ? [toFood(row, languages)] : [];
+      }),
+      nextOffset: ids.length > limit ? offset + limit : null,
+    };
+  }
 
   /**
    * Foods with this barcode, the best match first. A barcode the catalog doesn't have
