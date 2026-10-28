@@ -49,6 +49,19 @@ was probably mistyped.
 Foods fetched live keep `from_dump = false`, so an import doesn't retire them for
 missing from the export.
 
+## Search
+
+`GET /v1/foods?q=…&limit=20&offset=0` searches names in every language and the brand,
+ignoring case and accents (`zolty` finds `żółty`). It combines two indexes on
+`food_search_text(names, brand)`: trigrams tolerate typos, prefixes match partly typed
+words (`serek wiej`). Results come sold-in-Poland first, then by match quality and
+popularity. There's no total count, which would cost as much as the slowest search;
+`nextOffset` is null on the last page.
+
+The service depends on the `FoodSearch` interface, so a search engine could replace the
+PostgreSQL implementation (ADR-0006). Most queries take 15–50 ms on 1.3 million foods;
+very common words (`protein`) take up to about 200 ms, since every match is scored.
+
 ## Database access
 
 Each role gets only what it needs ([tools/db/catalog.psql](../../../tools/db/catalog.psql)):
