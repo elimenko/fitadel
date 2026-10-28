@@ -4,8 +4,14 @@ import { telemetry } from './instrumentation';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
+import { writeFileSync } from 'node:fs';
 import { AppModule } from './app/app.module';
 import type { Env } from './config/env';
+import {
+  configureHttp,
+  createOpenApiDocument,
+  serveApiDocs,
+} from './http/http-setup';
 import { importOffCommand } from './import/import-command';
 
 async function bootstrap() {
@@ -13,6 +19,13 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   const logger = app.get(Logger);
   app.useLogger(logger);
+  configureHttp(app);
+
+  const config = app.get<ConfigService<Env, true>>(ConfigService);
+  // Interactive API docs for development; not exposed in production
+  if (config.get('NODE_ENV', { infer: true }) !== 'production') {
+    serveApiDocs(app);
+  }
 
   // SIGTERM (Kubernetes, docker stop) or SIGINT (Ctrl+C): stop accepting requests,
   // finish in-flight ones and close the database pool, then flush telemetry last,
@@ -26,7 +39,6 @@ async function bootstrap() {
     });
   }
 
-  const config = app.get<ConfigService<Env, true>>(ConfigService);
   const port = config.get('PORT', { infer: true });
   await app.listen(port);
   // Set when Nx waits for this server to be ready
@@ -44,10 +56,31 @@ async function bootstrap() {
   logger.log(`Catalog service is running on: http://localhost:${port}`);
 }
 
-// `node main.js` starts the HTTP service; `node main.js import-off <file>` runs the import
+/** Writes the OpenAPI document to a file, without starting the server */
+async function openApiCommand([file]: string[]): Promise<number> {
+  if (!file) {
+    console.error('Usage: openapi <openapi.json>');
+    return 2;
+  }
+  const app = await NestFactory.create(AppModule, { logger: false });
+  configureHttp(app);
+  writeFileSync(
+    file,
+    JSON.stringify(createOpenApiDocument(app), null, 2) + '\n',
+  );
+  await app.close();
+  return 0;
+}
+
+// `node main.js` starts the HTTP service; other commands run once and exit
+const commands: Record<string, (args: string[]) => Promise<number>> = {
+  'import-off': importOffCommand,
+  openapi: openApiCommand,
+};
 const [command, ...args] = process.argv.slice(2);
-if (command === 'import-off') {
-  importOffCommand(args)
+const run = command && commands[command];
+if (run) {
+  run(args)
     .then((exitCode) => telemetry.shutdown().then(() => process.exit(exitCode)))
     .catch((error) => {
       console.error(error);

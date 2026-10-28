@@ -17,3 +17,5 @@ allowBuilds:
   ssh2: false
   # postinstall only prints a version-scheme warning
   protobufjs: false
+  # Install analytics (via swagger-ui-dist); no function for us
+  '@scarf/scarf': false
