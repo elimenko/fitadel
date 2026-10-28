@@ -6,6 +6,7 @@ import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app/app.module';
 import type { Env } from './config/env';
+import { importOffCommand } from './import/import-command';
 
 async function bootstrap() {
   // Buffer Nest's startup logs until the pino logger is ready
@@ -43,4 +44,15 @@ async function bootstrap() {
   logger.log(`Catalog service is running on: http://localhost:${port}`);
 }
 
-bootstrap();
+// `node main.js` starts the HTTP service; `node main.js import-off <file>` runs the import
+const [command, ...args] = process.argv.slice(2);
+if (command === 'import-off') {
+  importOffCommand(args)
+    .then((exitCode) => telemetry.shutdown().then(() => process.exit(exitCode)))
+    .catch((error) => {
+      console.error(error);
+      process.exit(1);
+    });
+} else {
+  bootstrap();
+}
