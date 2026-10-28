@@ -605,7 +605,9 @@ onPosix('shutdown', () => {
           NODE_ENV: 'production',
           PORT: String(port),
           DATABASE_URL: urls.app,
-          OTEL_SDK_DISABLED: 'true',
+          // Telemetry on, with no collector listening (port 9 refuses): shutdown must
+          // still exit cleanly when the collector is unreachable
+          OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:9',
         },
       },
     );

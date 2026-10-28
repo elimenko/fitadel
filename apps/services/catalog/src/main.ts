@@ -1,5 +1,5 @@
 // Must be the first import: see instrumentation.ts
-import { telemetry } from './instrumentation';
+import { shutdownTelemetry } from './instrumentation';
 
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
@@ -34,7 +34,7 @@ async function bootstrap() {
     process.once(signal, async () => {
       logger.log(`Received ${signal}, shutting down`);
       await app.close();
-      await telemetry.shutdown();
+      await shutdownTelemetry();
       process.exit(0);
     });
   }
@@ -62,7 +62,12 @@ async function openApiCommand([file]: string[]): Promise<number> {
     console.error('Usage: openapi <openapi.json>');
     return 2;
   }
-  const app = await NestFactory.create(AppModule, { logger: false });
+  // Quiet, but startup errors (e.g. invalid config) are thrown to the caller, which
+  // prints them; by default Nest would log them (silenced here) and exit
+  const app = await NestFactory.create(AppModule, {
+    logger: false,
+    abortOnError: false,
+  });
   configureHttp(app);
   writeFileSync(
     file,
@@ -81,7 +86,7 @@ const [command, ...args] = process.argv.slice(2);
 const run = command && commands[command];
 if (run) {
   run(args)
-    .then((exitCode) => telemetry.shutdown().then(() => process.exit(exitCode)))
+    .then((exitCode) => shutdownTelemetry().then(() => process.exit(exitCode)))
     .catch((error) => {
       console.error(error);
       process.exit(1);
