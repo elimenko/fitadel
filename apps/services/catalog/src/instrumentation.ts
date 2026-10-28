@@ -49,3 +49,15 @@ export const telemetry = new NodeSDK({
 });
 
 telemetry.start();
+
+/**
+ * Flushes and stops telemetry. Never throws: an unreachable collector (e.g. in CI, or
+ * during an outage) must not turn a clean shutdown or a finished command into a failure.
+ */
+export async function shutdownTelemetry(): Promise<void> {
+  try {
+    await telemetry.shutdown();
+  } catch (error) {
+    console.warn('Telemetry could not be flushed:', (error as Error).message);
+  }
+}
