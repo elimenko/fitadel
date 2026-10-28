@@ -25,6 +25,7 @@ UI/UX is designed mobile-first on every platform.
 - [ ] OpenID Connect provider (authorization code + PKCE)
 - [ ] User accounts and sign-in
 - [ ] API gateway (Envoy): routing, token validation at the edge, rate limiting
+- [ ] Sign-in with Google (federated identity)
 
 ### Phase 3: Goals and diary
 
