@@ -13,7 +13,25 @@ describe('validateEnv', () => {
       OFF_API_URL: 'https://world.openfoodfacts.org',
       OFF_USER_AGENT: 'Fitadel/0.1 (+https://github.com/elimenko/fitadel)',
       OFF_TIMEOUT_MS: 2000,
+      AUTH_MODE: 'none',
     });
+  });
+
+  it('refuses development headers in production', () => {
+    expect(() =>
+      validateEnv({
+        NODE_ENV: 'production',
+        AUTH_MODE: 'dev-headers',
+        DATABASE_URL,
+      }),
+    ).toThrow(/AUTH_MODE/);
+    expect(
+      validateEnv({
+        NODE_ENV: 'development',
+        AUTH_MODE: 'dev-headers',
+        DATABASE_URL,
+      }),
+    ).toMatchObject({ AUTH_MODE: 'dev-headers' });
   });
 
   it('parses strings into typed values', () => {
