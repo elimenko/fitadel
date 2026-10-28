@@ -69,6 +69,9 @@ model Food {
   popularity      Int           @default(0)
   /// Where it's sold (Open Food Facts country tags, e.g. poland); ranks Polish products first
   countries       String[]      @default([])
+  /// Came from an Open Food Facts export at least once. Only such foods are retired when
+  /// missing from a later export; foods fetched live from the API often aren't in it.
+  fromDump        Boolean       @default(false) @map("from_dump")
   sourceUpdatedAt DateTime?     @map("source_updated_at") @db.Timestamptz
   /// Foods are never deleted, because diary entries refer to them
   retiredAt       DateTime?     @map("retired_at") @db.Timestamptz
@@ -123,4 +126,14 @@ model FoodImport {
   servingAmount   Decimal?      @map("serving_amount") @db.Decimal(7, 2)
 
   @@map("food_import")
+}
+
+/// Barcodes Open Food Facts didn't have (or had without usable data) when last asked.
+/// The live lookup doesn't ask again for a day, to spare their API and our latency.
+model OffLookupMiss {
+  /// GTIN-14
+  barcode   String   @id
+  checkedAt DateTime @map("checked_at") @db.Timestamptz
+
+  @@map("off_lookup_miss")
 }

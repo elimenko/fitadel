@@ -12,6 +12,7 @@ import {
 import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,6 +21,7 @@ import { Client, Pool } from 'pg';
 import type { BarcodeLookupDto } from './food/food.dto';
 import type { ProblemDetails } from './http/problem-details.filter';
 import { importOffDump } from './import/off-import';
+import { WHEY_BARCODE, wheyProtein } from './off/off-api-product.fixture';
 
 const workspaceRoot = join(__dirname, '../../../..');
 const projectRoot = join(__dirname, '..');
@@ -284,12 +286,42 @@ describe('Open Food Facts import', () => {
   });
 });
 
+/**
+ * Plays the Open Food Facts API, so tests never call the real one: it knows the whey
+ * protein, answers SLOW_BARCODE too late, and 404 for everything else.
+ */
+const SLOW_BARCODE = '4006381333931';
+const fakeOff = {
+  requests: [] as { code: string; userAgent?: string }[],
+  server: createHttpServer((request, response) => {
+    const code =
+      /\/api\/v2\/product\/(\d+)\.json/.exec(request.url ?? '')?.[1] ?? '';
+    fakeOff.requests.push({ code, userAgent: request.headers['user-agent'] });
+    const answer = (status: number, body: object) =>
+      response
+        .writeHead(status, { 'Content-Type': 'application/json' })
+        .end(JSON.stringify(body));
+    if (code === WHEY_BARCODE) answer(200, { status: 1, product: wheyProtein });
+    else if (code === SLOW_BARCODE)
+      setTimeout(() => answer(200, { status: 0 }), 1500);
+    else answer(404, { status: 0, status_verbose: 'product not found' });
+  }),
+  count: (code: string) =>
+    fakeOff.requests.filter((r) => r.code === code).length,
+};
+
 describe('service', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
+    await new Promise<void>((resolve) =>
+      fakeOff.server.listen(0, '127.0.0.1', resolve),
+    );
+    const { port } = fakeOff.server.address() as { port: number };
     // Config is validated when AppModule is loaded, so set the env first
     process.env.DATABASE_URL = urls.app;
+    process.env.OFF_API_URL = `http://127.0.0.1:${port}`;
+    process.env.OFF_TIMEOUT_MS = '300';
     const { AppModule } = await import('./app/app.module.js');
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -302,6 +334,7 @@ describe('service', () => {
 
   afterAll(async () => {
     await app?.close();
+    await new Promise((resolve) => fakeOff.server.close(resolve));
   });
 
   it('is ready with a real database', async () => {
@@ -395,6 +428,86 @@ describe('service', () => {
       expect(body.errors).toEqual([
         { path: 'code', message: 'A barcode has 8 to 14 digits' },
       ]);
+    });
+
+    describe('live lookup in Open Food Facts (a fake server)', () => {
+      it('fetches a barcode the catalog lacks, stores it, and asks only once', async () => {
+        const first = await get(WHEY_BARCODE, 'en');
+        expect(first.response.status).toBe(200);
+        expect(first.body.food).toMatchObject({
+          source: 'off',
+          name: '100% WHEY PROTEIN DOUBLE RICH CHOCOLATE',
+          per100: { kcal: 374, protein: 76, fiber: null },
+          servings: [{ label: '1 serving (31 g)', amount: 31 }],
+        });
+        // The agreed identification, sent to Open Food Facts
+        expect(fakeOff.requests.at(-1)?.userAgent).toBe(
+          'Fitadel/0.1 (+https://github.com/elimenko/fitadel)',
+        );
+
+        // Stored: the next scan is a normal database hit
+        expect((await get(WHEY_BARCODE)).response.status).toBe(200);
+        expect(fakeOff.count(WHEY_BARCODE)).toBe(1);
+      });
+
+      it('remembers a barcode Open Food Facts does not know', async () => {
+        const unknown = '96385074';
+        expect((await get(unknown)).response.status).toBe(404);
+        expect((await get(unknown)).response.status).toBe(404);
+        expect(fakeOff.count(unknown)).toBe(1);
+      });
+
+      it('answers quickly when Open Food Facts is slow, and asks again later', async () => {
+        const started = Date.now();
+        expect((await get(SLOW_BARCODE)).response.status).toBe(404);
+        // Timeout is 300 ms; the fake would answer after 1500 ms
+        expect(Date.now() - started).toBeLessThan(1000);
+        // A timeout says nothing about the product, so it isn't remembered
+        await get(SLOW_BARCODE);
+        expect(fakeOff.count(SLOW_BARCODE)).toBe(2);
+      });
+
+      it('keeps live-fetched foods when an export without them is imported', async () => {
+        const pool = new Pool({ connectionString: urls.app });
+        try {
+          const file = join(
+            mkdtempSync(join(tmpdir(), 'off-dump-')),
+            'dump.jsonl.gz',
+          );
+          writeFileSync(
+            file,
+            gzipSync(
+              JSON.stringify({
+                code: '5900512300108',
+                countries_tags: ['en:poland'],
+                lang: 'pl',
+                product_name_pl: 'Twaróg półtłusty',
+                last_modified_t: 1770000000,
+                nutrition: {
+                  aggregated_set: {
+                    per: '100g',
+                    nutrients: {
+                      'energy-kcal': {
+                        value: 133,
+                        unit: 'kcal',
+                        source: 'packaging',
+                      },
+                    },
+                  },
+                },
+              }),
+            ),
+          );
+          await importOffDump(pool, file);
+          const { rows } = await pool.query(
+            'SELECT from_dump, retired_at FROM food WHERE source_ref = $1',
+            [WHEY_BARCODE],
+          );
+          expect(rows).toEqual([{ from_dump: false, retired_at: null }]);
+        } finally {
+          await pool.end();
+        }
+      });
     });
   });
 });

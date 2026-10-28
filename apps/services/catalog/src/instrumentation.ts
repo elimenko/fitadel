@@ -14,6 +14,7 @@ import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { NestInstrumentation } from '@opentelemetry/instrumentation-nestjs-core';
 import { PgInstrumentation } from '@opentelemetry/instrumentation-pg';
 import { PinoInstrumentation } from '@opentelemetry/instrumentation-pino';
+import { UndiciInstrumentation } from '@opentelemetry/instrumentation-undici';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 
 // The SDK's own exports to the collector (OTLP over HTTP)
@@ -41,6 +42,9 @@ export const telemetry = new NodeSDK({
     new PgInstrumentation({ requireParentSpan: true }),
     // Adds trace_id/span_id to log lines and sends logs over OTLP
     new PinoInstrumentation(),
+    // fetch() is built on undici, which the http instrumentation doesn't see
+    // (outgoing calls such as the Open Food Facts API)
+    new UndiciInstrumentation(),
   ],
 });
 
