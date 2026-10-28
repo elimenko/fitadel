@@ -73,6 +73,14 @@ libs/
   <domain>/   libraries grouped by domain (food, diary, ...), plus shared/
 ```
 
+## Data
+
+Food data comes from [Open Food Facts](https://world.openfoodfacts.org), available
+under the [Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/1-0/).
+Import a dump into the catalog with
+`pnpm nx run catalog:import-off <openfoodfacts-products.jsonl.gz>`
+([download](https://world.openfoodfacts.org/data)).
+
 ## License
 
 [MIT](LICENSE)
