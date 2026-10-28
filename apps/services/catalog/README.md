@@ -18,12 +18,36 @@ pnpm nx run catalog:prisma migrate deploy   # apply migrations
 pnpm nx serve catalog                       # http://localhost:3000/health/ready
 ```
 
-| Target                                | What it does                                      |
-| ------------------------------------- | ------------------------------------------------- |
-| `nx test catalog`                     | unit tests                                        |
-| `nx run catalog:integration`          | tests against a throwaway Postgres (needs Docker) |
-| `nx run catalog:prisma <args>`        | the Prisma CLI, as the migrator role              |
-| `nx run catalog:import-off <dump.gz>` | import an Open Food Facts dump (below)            |
+| Target                                | What it does                                       |
+| ------------------------------------- | -------------------------------------------------- |
+| `nx test catalog`                     | unit tests                                         |
+| `nx run catalog:integration`          | tests against a throwaway Postgres (needs Docker)  |
+| `nx run catalog:prisma <args>`        | the Prisma CLI, as the migrator role               |
+| `nx run catalog:import-off <dump.gz>` | import an Open Food Facts dump (below)             |
+| `nx run catalog:openapi`              | regenerate `openapi.json` (CI checks it's current) |
+
+API docs: Swagger UI at http://localhost:3000/docs (not in production), the OpenAPI
+description in [openapi.json](openapi.json). Errors use RFC 9457 problem details.
+
+## Barcode lookup
+
+`GET /v1/foods/barcode/{code}` takes the barcode as printed (EAN-8, UPC-A, EAN-13 or
+GTIN-14) and stores and compares it as GTIN-14. A wrong check digit is a `400`: a digit
+was probably mistyped.
+
+1. **The catalog.** Every visible food with that barcode, best first: the user's own
+   private copy, then a community food, then imported ones (most scanned first). The
+   best one is returned, the rest as `alternatives`.
+2. **Open Food Facts, live** (only when the catalog has none). The export lacks products
+   the API has. A usable product goes through the same cleaning rules as the import and
+   is stored, so the next scan is a database hit. The call gives up after
+   `OFF_TIMEOUT_MS` (2 s).
+3. **Not found** (`404`). A barcode Open Food Facts doesn't have, or has without usable
+   data, isn't asked about again for a day. Timeouts and errors aren't remembered:
+   they say nothing about the product.
+
+Foods fetched live keep `from_dump = false`, so an import doesn't retire them for
+missing from the export.
 
 ## Database access
 
@@ -126,7 +150,6 @@ minute.
 
 ### Known gaps
 
-- The export doesn't contain every product Open Food Facts has. Barcodes missing from it
-  will be looked up live in the Open Food Facts API.
-- Foods fetched that way aren't in the dump, so the retire step will have to leave them
-  alone.
+- The export doesn't contain every product Open Food Facts has. The
+  [barcode lookup](#barcode-lookup) fetches missing ones live; the retire step only
+  considers foods that came from an export (`from_dump`).

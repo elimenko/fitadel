@@ -16,7 +16,7 @@ UI/UX is designed mobile-first on every platform.
 
 - [ ] Food catalog service with search
 - [x] Import from Open Food Facts
-- [ ] Barcode lookup
+- [x] Barcode lookup (catalog first, then Open Food Facts live)
 - [ ] Custom and manually entered foods
 - [x] Observability baseline: OpenTelemetry instrumentation, local metrics/logs/traces stack
 
