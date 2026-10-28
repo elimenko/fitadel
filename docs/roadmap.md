@@ -15,7 +15,7 @@ UI/UX is designed mobile-first on every platform.
 ### Phase 1: Food catalog
 
 - [ ] Food catalog service with search
-- [ ] Import from Open Food Facts and USDA FoodData Central
+- [x] Import from Open Food Facts
 - [ ] Barcode lookup
 - [ ] Custom and manually entered foods
 - [x] Observability baseline: OpenTelemetry instrumentation, local metrics/logs/traces stack
@@ -49,6 +49,7 @@ UI/UX is designed mobile-first on every platform.
 ### Phase 6: AI assistant
 
 - [ ] Bring-your-own-key support for Anthropic and OpenAI
+- [ ] Generic foods from USDA FoodData Central, with translated names
 - [ ] The assistant proposes diary entries; the user confirms them.
       The app stays the system of record.
 
