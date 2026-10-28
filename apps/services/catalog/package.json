@@ -168,6 +168,15 @@
         "dependsOn": [
           "build"
         ]
+      },
+      "openapi": {
+        "command": "node dist/main.js openapi openapi.json && prettier --write openapi.json",
+        "options": {
+          "cwd": "{projectRoot}"
+        },
+        "dependsOn": [
+          "build"
+        ]
       }
     },
     "tags": [
@@ -180,6 +189,7 @@
     "@nestjs/config": "^12.0.1",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/swagger": "11.4.7",
     "@nestjs/terminus": "^12.1.0",
     "@opentelemetry/api": "1.10.0",
     "@opentelemetry/instrumentation-express": "0.72.0",
@@ -191,6 +201,7 @@
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
     "nestjs-pino": "5.3.1",
+    "nestjs-zod": "5.5.0",
     "pg": "^8.23.1",
     "pg-copy-streams": "7.0.0",
     "pino": "10.4.0",

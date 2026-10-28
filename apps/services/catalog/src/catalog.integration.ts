@@ -293,6 +293,8 @@ describe('service', () => {
       imports: [AppModule],
     }).compile();
     app = moduleRef.createNestApplication();
+    const { configureHttp } = await import('./http/http-setup.js');
+    configureHttp(app);
     await app.listen(0);
   });
 
@@ -305,6 +307,20 @@ describe('service', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       info: { database: { status: 'up' } },
+    });
+  });
+
+  it('answers errors with RFC 9457 problem details', async () => {
+    const response = await fetch(`${await app.getUrl()}/v1/unknown`);
+    expect(response.status).toBe(404);
+    expect(response.headers.get('content-type')).toMatch(
+      /^application\/problem\+json/,
+    );
+    expect(await response.json()).toMatchObject({
+      type: 'about:blank',
+      title: 'Not Found',
+      status: 404,
+      instance: '/v1/unknown',
     });
   });
 });
