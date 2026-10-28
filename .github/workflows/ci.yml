@@ -48,6 +48,7 @@ jobs:
           git diff --exit-code -- apps/services/catalog/openapi.json
         env:
           DATABASE_URL: postgresql://unused@localhost:5432/catalog
+          OTEL_SDK_DISABLED: 'true'
 
   integration:
     name: Integration tests
