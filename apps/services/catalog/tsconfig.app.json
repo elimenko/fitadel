@@ -25,5 +25,9 @@
     "src/**/*.integration.ts",
     "jest.integration.config.cts"
   ],
-  "references": []
+  "references": [
+    {
+      "path": "../../../libs/shared/nutrition/tsconfig.lib.json"
+    }
+  ]
 }

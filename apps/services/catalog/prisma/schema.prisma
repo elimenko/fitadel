@@ -65,6 +65,10 @@ model Food {
   salt            Decimal?      @db.Decimal(5, 2)
   /// Display-only nutrients (vitamins, minerals), keyed by Open Food Facts nutrient name
   extraNutrients  Json?         @map("extra_nutrients")
+  /// How often the product was scanned at the source (Open Food Facts); ranks search results
+  popularity      Int           @default(0)
+  /// Where it's sold (Open Food Facts country tags, e.g. poland); ranks Polish products first
+  countries       String[]      @default([])
   sourceUpdatedAt DateTime?     @map("source_updated_at") @db.Timestamptz
   /// Foods are never deleted, because diary entries refer to them
   retiredAt       DateTime?     @map("retired_at") @db.Timestamptz
@@ -93,4 +97,30 @@ model FoodServing {
 
   @@index([foodId])
   @@map("food_serving")
+}
+
+/// Staging for the Open Food Facts import: one cleaned product per row, merged into food
+/// in a single transaction. UNLOGGED in SQL (no write-ahead log; emptied after a crash).
+model FoodImport {
+  sourceRef       String        @id @map("source_ref")
+  barcode         String
+  names           Json
+  brand           String?
+  basis           NutrientBasis
+  kcal            Decimal       @db.Decimal(6, 2)
+  protein         Decimal?      @db.Decimal(5, 2)
+  fat             Decimal?      @db.Decimal(5, 2)
+  carbs           Decimal?      @db.Decimal(5, 2)
+  sugars          Decimal?      @db.Decimal(5, 2)
+  fiber           Decimal?      @db.Decimal(5, 2)
+  saturatedFat    Decimal?      @map("saturated_fat") @db.Decimal(5, 2)
+  salt            Decimal?      @db.Decimal(5, 2)
+  extraNutrients  Json?         @map("extra_nutrients")
+  popularity      Int
+  countries       String[]
+  sourceUpdatedAt DateTime?     @map("source_updated_at") @db.Timestamptz
+  servingLabel    String?       @map("serving_label")
+  servingAmount   Decimal?      @map("serving_amount") @db.Decimal(7, 2)
+
+  @@map("food_import")
 }

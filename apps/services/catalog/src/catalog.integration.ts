@@ -11,10 +11,13 @@ import {
 } from '@testcontainers/postgresql';
 import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Client } from 'pg';
+import { gzipSync } from 'node:zlib';
+import { Client, Pool } from 'pg';
+import { importOffDump } from './import/off-import';
 
 const workspaceRoot = join(__dirname, '../../../..');
 const projectRoot = join(__dirname, '..');
@@ -30,6 +33,7 @@ function postgresImage(): string {
 const passwords = {
   migrator: randomBytes(16).toString('hex'),
   app: randomBytes(16).toString('hex'),
+  reader: randomBytes(16).toString('hex'),
 };
 
 let container: StartedPostgreSqlContainer;
@@ -57,6 +61,7 @@ beforeAll(async () => {
     .withEnvironment({
       CATALOG_MIGRATOR_PASSWORD: passwords.migrator,
       CATALOG_APP_PASSWORD: passwords.app,
+      CATALOG_READER_PASSWORD: passwords.reader,
     })
     // An empty volume runs these on first start, like a fresh local or cloud setup
     .withCopyFilesToContainer(
@@ -101,8 +106,178 @@ describe('database', () => {
       await expect(client.query('DROP TABLE food')).rejects.toThrow(
         /must be owner/,
       );
+      // TRUNCATE is granted for the import's staging table only
+      await expect(client.query('TRUNCATE food')).rejects.toThrow(
+        /permission denied/,
+      );
     } finally {
       await client.end();
+    }
+  });
+});
+
+describe('Open Food Facts import', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'off-dump-'));
+  let pool: Pool;
+
+  /** Writes a gzipped JSONL dump like the real one, with only the fields we read */
+  function dump(name: string, products: object[]): string {
+    const file = join(dir, name);
+    const lines = products.map((product) => JSON.stringify(product)).join('\n');
+    writeFileSync(file, gzipSync(lines));
+    return file;
+  }
+
+  const nutrition = (kcal: number, per = '100g') => ({
+    aggregated_set: {
+      per,
+      nutrients: {
+        'energy-kcal': { value: kcal, unit: 'kcal', source: 'packaging' },
+        proteins: { value: 18, unit: 'g', source: 'packaging' },
+        fat: { value: 4, unit: 'g', source: 'packaging' },
+        carbohydrates: { value: 3.5, unit: 'g', source: 'packaging' },
+      },
+    },
+  });
+  const twarog = {
+    code: '5900512300108',
+    countries_tags: ['en:poland'],
+    lang: 'pl',
+    product_name_pl: 'Twaróg półtłusty',
+    serving_size: '1 porcja (50 g)',
+    serving_quantity: '50',
+    last_modified_t: 1770000000,
+    nutrition: nutrition(133),
+  };
+  // Sold in Poland, but only named in French
+  const boisson = {
+    code: '5449000000996',
+    countries_tags: ['en:poland', 'en:france'],
+    lang: 'fr',
+    product_name: 'Boisson gazeuse',
+    last_modified_t: 1770000000,
+    nutrition: {
+      aggregated_set: {
+        per: '100ml',
+        nutrients: {
+          'energy-kcal': { value: 42, unit: 'kcal', source: 'packaging' },
+        },
+      },
+    },
+  };
+  const withoutNutrition = {
+    code: '5901234123457',
+    countries_tags: ['en:poland'],
+    product_name_pl: 'Serek',
+  };
+  // Not tagged as sold in Poland (like Alpro or imported supplements): imported too
+  const irish = {
+    ...twarog,
+    code: '3017620422003',
+    countries_tags: ['en:ireland'],
+  };
+
+  const full = () =>
+    dump('full.jsonl.gz', [twarog, boisson, withoutNutrition, irish]);
+  const foods = async () =>
+    (
+      await pool.query<{
+        source_ref: string;
+        retired: boolean;
+        servings: number;
+      }>(
+        `SELECT source_ref, retired_at IS NOT NULL AS retired,
+           (SELECT count(*)::int FROM food_serving WHERE food_id = food.id) AS servings
+         FROM food WHERE source = 'off' ORDER BY source_ref`,
+      )
+    ).rows;
+
+  beforeAll(() => {
+    pool = new Pool({ connectionString: urls.app });
+  });
+  afterAll(async () => {
+    await pool?.end();
+  });
+
+  it('imports every clean product with nutrition data, from any country', async () => {
+    const report = await importOffDump(pool, full());
+    expect(report).toMatchObject({
+      read: 4,
+      // The product without nutrition data isn't even parsed
+      parsed: 3,
+      staged: 3,
+      rejected: {},
+      inserted: 3,
+      updated: 0,
+      retired: 0,
+    });
+    expect(await foods()).toEqual([
+      { source_ref: '3017620422003', retired: false, servings: 1 },
+      { source_ref: '5449000000996', retired: false, servings: 0 },
+      { source_ref: '5900512300108', retired: false, servings: 1 },
+    ]);
+    const { rows } = await pool.query(
+      "SELECT countries FROM food WHERE source_ref = '3017620422003'",
+    );
+    expect(rows).toEqual([{ countries: ['ireland'] }]);
+    // Staging is emptied after a successful merge
+    const staging = await pool.query(
+      'SELECT count(*)::int AS rows FROM food_import',
+    );
+    expect(staging.rows).toEqual([{ rows: 0 }]);
+  });
+
+  it('finds a French-only product by text search', async () => {
+    const { rows } = await pool.query(
+      "SELECT source_ref FROM food WHERE f_norm('boisson') <% food_search_text(names, brand)",
+    );
+    expect(rows).toEqual([{ source_ref: '5449000000996' }]);
+  });
+
+  it('changes nothing when the same dump is imported again', async () => {
+    expect(await importOffDump(pool, full())).toMatchObject({
+      inserted: 0,
+      updated: 0,
+      unchanged: 3,
+    });
+  });
+
+  it('refuses to retire a large share of the catalog (truncated dump)', async () => {
+    const truncated = dump('truncated.jsonl.gz', [twarog]);
+    await expect(importOffDump(pool, truncated)).rejects.toThrow(
+      /Refusing to retire 2 of 3/,
+    );
+    expect((await foods()).every((food) => !food.retired)).toBe(true);
+  });
+
+  it('retires products that are gone from Open Food Facts', async () => {
+    const truncated = dump('truncated.jsonl.gz', [twarog]);
+    expect(
+      await importOffDump(pool, truncated, { maxRetiredShare: 1 }),
+    ).toMatchObject({
+      retired: 2,
+    });
+    expect(await foods()).toContainEqual({
+      source_ref: '5449000000996',
+      retired: true,
+      servings: 0,
+    });
+  });
+
+  it('allows only one import at a time', async () => {
+    const other = await pool.connect();
+    try {
+      await other.query(
+        "SELECT pg_advisory_lock(hashtext('catalog:off-import'))",
+      );
+      await expect(importOffDump(pool, full())).rejects.toThrow(
+        /Another import is running/,
+      );
+    } finally {
+      await other.query(
+        "SELECT pg_advisory_unlock(hashtext('catalog:off-import'))",
+      );
+      other.release();
     }
   });
 });
@@ -178,9 +353,7 @@ onPosix('shutdown', () => {
       } catch {
         // not listening yet
       }
-      if (attempt > 100)
-        throw new Error(`Server didn't start:
-${output}`);
+      if (attempt > 100) throw new Error(`Server didn't start:\n${output}`);
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
