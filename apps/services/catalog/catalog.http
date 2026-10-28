@@ -72,3 +72,62 @@ GET {{baseUrl}}/docs/openapi.json
 
 ### An unknown route: 404 as RFC 9457 problem details (application/problem+json)
 GET {{baseUrl}}/v1/nothing-here
+
+# ---------------------------------------------------------------------------------
+# Custom foods (needs AUTH_MODE=dev-headers in apps/services/catalog/.env)
+# Until Phase 2 brings logins, X-Dev-User-Id says who you are (any UUID)
+# ---------------------------------------------------------------------------------
+
+@me = 0192f8a4-6a3e-7c00-8f00-00000000e90e
+
+### Add a private food (only you see it). Copy the id from the response for the next ones
+# @name created
+POST {{baseUrl}}/v1/foods
+X-Dev-User-Id: {{me}}
+Content-Type: application/json
+
+{
+  "names": { "pl": "Mój twarożek", "ru": "Мой творожок" },
+  "brand": "Domowe",
+  "barcode": "5012345678900",
+  "per100": { "kcal": 120, "protein": 14, "fat": 5, "carbs": 3.5 },
+  "servings": [{ "label": "1 łyżka (30 g)", "amount": 30 }]
+}
+
+### Read it back (anyone else gets 404)
+GET {{baseUrl}}/v1/foods/{{created.response.body.id}}
+X-Dev-User-Id: {{me}}
+Accept-Language: ru
+
+### Scan its barcode: your food comes first
+GET {{baseUrl}}/v1/foods/barcode/5012345678900
+X-Dev-User-Id: {{me}}
+
+### Add it again: 409 with existingFoodId
+POST {{baseUrl}}/v1/foods
+X-Dev-User-Id: {{me}}
+Content-Type: application/json
+
+{ "names": { "pl": "Duplikat" }, "barcode": "5012345678900", "per100": { "kcal": 100 } }
+
+### Public needs the contributor role: 403 (add "X-Dev-Roles: contributor" to allow it)
+POST {{baseUrl}}/v1/foods
+X-Dev-User-Id: {{me}}
+Content-Type: application/json
+
+{ "names": { "pl": "Dla wszystkich" }, "per100": { "kcal": 100 }, "visibility": "public" }
+
+### Change your food (full replacement)
+PUT {{baseUrl}}/v1/foods/{{created.response.body.id}}
+X-Dev-User-Id: {{me}}
+Content-Type: application/json
+
+{
+  "names": { "pl": "Mój twarożek light" },
+  "barcode": "5012345678900",
+  "per100": { "kcal": 95, "protein": 15, "fat": 2, "carbs": 3.5 }
+}
+
+### Retire it: 204; still readable by id, no longer in lookups and search
+DELETE {{baseUrl}}/v1/foods/{{created.response.body.id}}
+X-Dev-User-Id: {{me}}

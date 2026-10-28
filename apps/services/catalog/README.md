@@ -51,6 +51,35 @@ was probably mistyped.
 Foods fetched live keep `from_dump = false`, so an import doesn't retire them for
 missing from the export.
 
+## Custom foods
+
+Users add foods the catalog lacks, and personal corrections of existing ones:
+
+| Endpoint                | What it does                                                 |
+| ----------------------- | ------------------------------------------------------------ |
+| `POST /v1/foods`        | create (`basedOnId`: a personal copy of another food)        |
+| `GET /v1/foods/{id}`    | read one food, also when retired (diary entries refer to it) |
+| `PUT /v1/foods/{id}`    | replace your own food                                        |
+| `DELETE /v1/foods/{id}` | retire your own food (never deleted)                         |
+
+The rules:
+
+- New foods are **private**: only their owner sees them, in lookups and search too.
+  Contributors may make foods **public**, for everyone.
+- Only a food's creator may change or retire it. For other foods (imported, or someone
+  else's) you create your own copy, which ranks first for you.
+- One public user food per barcode, and one per user and barcode among private foods. A
+  unique index enforces this while writing, so two simultaneous requests can't both
+  pass. The second gets `409` with `existingFoodId`.
+- Invisible foods answer `404`, not `403`, so the API doesn't reveal that someone's
+  private food exists.
+
+**Users until Phase 2.** There are no logins yet. With `AUTH_MODE=dev-headers`, requests
+say who they're from with `X-Dev-User-Id: <uuid>` (and `X-Dev-Roles: contributor`).
+Anyone can send these, so the service refuses to start with this mode in production.
+Endpoints only see a `Viewer { id, roles }`; Phase 2 replaces how it's established, not
+the endpoints.
+
 ## Search
 
 `GET /v1/foods?q=…&limit=20&offset=0` searches names in every language and the brand,
