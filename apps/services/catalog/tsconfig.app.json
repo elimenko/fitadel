@@ -23,7 +23,8 @@
     "eslint.config.cjs",
     "eslint.config.mjs",
     "src/**/*.integration.ts",
-    "jest.integration.config.cts"
+    "jest.integration.config.cts",
+    "src/**/*.fixture.ts"
   ],
   "references": [
     {

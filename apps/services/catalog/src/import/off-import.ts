@@ -166,7 +166,10 @@ async function runImport(
 
 async function knownProducts(client: PoolClient) {
   const { rows } = await client.query<{ source_ref: string; active: boolean }>(
-    "SELECT source_ref, retired_at IS NULL AS active FROM food WHERE source = 'off'",
+    // Only foods that came from an export can be retired for missing from one; foods
+    // fetched live from the API (from_dump = false) often aren't in it at all
+    `SELECT source_ref, retired_at IS NULL AND from_dump AS active
+     FROM food WHERE source = 'off'`,
   );
   return {
     all: new Set(rows.map((row) => row.source_ref)),
@@ -188,11 +191,11 @@ async function merge(
     INSERT INTO food (
       source, source_ref, barcode, names, brand, basis, kcal, protein, fat, carbs,
       sugars, fiber, saturated_fat, salt, extra_nutrients, popularity, countries,
-      source_updated_at, updated_at
+      from_dump, source_updated_at, updated_at
     )
     SELECT 'off', source_ref, barcode, names, brand, basis, kcal, protein, fat, carbs,
       sugars, fiber, saturated_fat, salt, extra_nutrients, popularity, countries,
-      source_updated_at, now()
+      true, source_updated_at, now()
     FROM food_import
     ON CONFLICT (source, source_ref) DO UPDATE SET
       barcode = excluded.barcode, names = excluded.names, brand = excluded.brand,
@@ -202,10 +205,12 @@ async function merge(
       salt = excluded.salt, extra_nutrients = excluded.extra_nutrients,
       popularity = excluded.popularity, countries = excluded.countries,
       source_updated_at = excluded.source_updated_at,
-      retired_at = NULL, updated_at = now()
+      from_dump = true, retired_at = NULL, updated_at = now()
     WHERE food.source_updated_at IS DISTINCT FROM excluded.source_updated_at
        OR food.popularity IS DISTINCT FROM excluded.popularity
        OR food.retired_at IS NOT NULL
+       -- A food fetched live that now appears in the export
+       OR NOT food.from_dump
     RETURNING id, (xmax = 0) AS inserted
   `);
   report.inserted = upserted.rows.filter((row) => row.inserted).length;

@@ -431,7 +431,7 @@
             }
           },
           "404": {
-            "description": "No food with this barcode",
+            "description": "Neither the catalog nor Open Food Facts has a usable food with this barcode",
             "content": {
               "application/problem+json": {
                 "schema": {

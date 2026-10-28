@@ -55,7 +55,10 @@ export class FoodController {
     description: 'The best match, plus alternatives',
   })
   @problem(400, 'Not a valid barcode (wrong length, or a mistyped digit)')
-  @problem(404, 'No food with this barcode')
+  @problem(
+    404,
+    'Neither the catalog nor Open Food Facts has a usable food with this barcode',
+  )
   async findByBarcode(
     @Param() { code }: BarcodeParamsDto,
     @Headers('accept-language') acceptLanguage: string | undefined,
@@ -71,6 +74,7 @@ export class FoodController {
       );
     }
     const result = await this.foods.findByBarcode(
+      code,
       barcode,
       preferredLanguages(acceptLanguage),
     );

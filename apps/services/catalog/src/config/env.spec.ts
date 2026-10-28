@@ -9,6 +9,10 @@ describe('validateEnv', () => {
       PORT: 3000,
       LOG_LEVEL: 'info',
       DATABASE_URL,
+      OFF_LOOKUP: 'enabled',
+      OFF_API_URL: 'https://world.openfoodfacts.org',
+      OFF_USER_AGENT: 'Fitadel/0.1 (+https://github.com/elimenko/fitadel)',
+      OFF_TIMEOUT_MS: 2000,
     });
   });
 
