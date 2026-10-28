@@ -62,6 +62,9 @@ pnpm nx serve catalog                       # http://localhost:3000/health/ready
 pnpm nx run catalog:integration             # integration tests (needs Docker)
 ```
 
+Each service documents itself, e.g. [the catalog](apps/services/catalog/README.md)
+(database roles, the Open Food Facts import).
+
 ## Repository layout
 
 ```
