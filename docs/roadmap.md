@@ -14,7 +14,7 @@ UI/UX is designed mobile-first on every platform.
 
 ### Phase 1: Food catalog
 
-- [ ] Food catalog service with search
+- [x] Food catalog service with search
 - [x] Import from Open Food Facts
 - [x] Barcode lookup (catalog first, then Open Food Facts live)
 - [ ] Custom and manually entered foods
