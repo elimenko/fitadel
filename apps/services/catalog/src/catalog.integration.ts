@@ -828,6 +828,8 @@ onPosix('shutdown', () => {
         env: {
           ...process.env,
           NODE_ENV: 'production',
+          // Other tests set dev-headers in this process; production refuses it
+          AUTH_MODE: 'none',
           PORT: String(port),
           DATABASE_URL: urls.app,
           // Telemetry on, with no collector listening (port 9 refuses): shutdown must
