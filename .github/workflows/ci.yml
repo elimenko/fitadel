@@ -41,6 +41,14 @@ jobs:
       - run: pnpm nx sync:check
       - run: pnpm nx affected -t lint test typecheck build --output-style=static
 
+      # The committed API description must match the code (no server or database needed)
+      - name: Check that openapi.json is up to date
+        run: |
+          pnpm nx run catalog:openapi --output-style=static
+          git diff --exit-code -- apps/services/catalog/openapi.json
+        env:
+          DATABASE_URL: postgresql://unused@localhost:5432/catalog
+
   integration:
     name: Integration tests
     runs-on: ubuntu-latest
