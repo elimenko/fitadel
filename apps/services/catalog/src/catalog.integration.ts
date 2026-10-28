@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { Client, Pool } from 'pg';
-import type { BarcodeLookupDto, SearchResultDto } from './food/food.dto';
+import type { BarcodeLookupDto, Food, SearchResultDto } from './food/food.dto';
 import type { ProblemDetails } from './http/problem-details.filter';
 import { importOffDump } from './import/off-import';
 import { WHEY_BARCODE, wheyProtein } from './off/off-api-product.fixture';
@@ -322,6 +322,7 @@ describe('service', () => {
     process.env.DATABASE_URL = urls.app;
     process.env.OFF_API_URL = `http://127.0.0.1:${port}`;
     process.env.OFF_TIMEOUT_MS = '300';
+    process.env.AUTH_MODE = 'dev-headers';
     const { AppModule } = await import('./app/app.module.js');
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -508,6 +509,230 @@ describe('service', () => {
           await pool.end();
         }
       });
+    });
+  });
+
+  describe('custom foods', () => {
+    const BOB = '0192f8a4-6a3e-7c00-8f00-00000000b0b0';
+    const ALICE = '0192f8a4-6a3e-7c00-8f00-0000000a11ce';
+    const CAROL = '0192f8a4-6a3e-7c00-8f00-00000000ca01';
+    const as = (user: string, contributor = false) => ({
+      'X-Dev-User-Id': user,
+      ...(contributor ? { 'X-Dev-Roles': 'contributor' } : {}),
+    });
+    const call = async (
+      method: string,
+      path: string,
+      headers: Record<string, string> = {},
+      body?: object,
+    ) => {
+      const response = await fetch(`${await app.getUrl()}${path}`, {
+        method,
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const text = await response.text();
+      return {
+        response,
+        body: (text ? JSON.parse(text) : null) as Food &
+          BarcodeLookupDto &
+          SearchResultDto &
+          ProblemDetails,
+      };
+    };
+    // A barcode none of the other tests use
+    const BARCODE = '5012345678900';
+    const serek = (overrides: object = {}) => ({
+      names: { pl: 'Serek domowy Bob', ru: 'Творожок Боба' },
+      barcode: BARCODE,
+      per100: { kcal: 98, protein: 11, fat: 4, carbs: 3 },
+      servings: [{ label: '1 kubek (150 g)', amount: 150 }],
+      ...overrides,
+    });
+    let bobsFood: string;
+    let alicesFood: string;
+
+    it('requires a user to add a food', async () => {
+      const { response } = await call('POST', '/v1/foods', {}, serek());
+      expect(response.status).toBe(401);
+    });
+
+    it('lets only contributors add public foods', async () => {
+      const { response, body } = await call(
+        'POST',
+        '/v1/foods',
+        as(BOB),
+        serek({ visibility: 'public' }),
+      );
+      expect(response.status).toBe(403);
+      expect(body.detail).toMatch(/contributors/);
+    });
+
+    it('adds a private food and points to it', async () => {
+      const { response, body } = await call(
+        'POST',
+        '/v1/foods',
+        as(BOB),
+        serek(),
+      );
+      expect(response.status).toBe(201);
+      expect(response.headers.get('location')).toBe(`/v1/foods/${body.id}`);
+      expect(body).toMatchObject({
+        source: 'user',
+        visibility: 'private',
+        mine: true,
+        barcode: '05012345678900',
+        per100: { kcal: 98, protein: 11, sugars: null },
+        servings: [{ label: '1 kubek (150 g)', amount: 150 }],
+      });
+      bobsFood = body.id;
+    });
+
+    it('shows a private food only to its owner', async () => {
+      const path = `/v1/foods/${bobsFood}`;
+      expect((await call('GET', path, as(BOB))).response.status).toBe(200);
+      expect((await call('GET', path, as(ALICE))).response.status).toBe(404);
+      expect((await call('GET', path)).response.status).toBe(404);
+    });
+
+    it('rejects implausible values like the import does', async () => {
+      const { response, body } = await call(
+        'POST',
+        '/v1/foods',
+        as(BOB),
+        serek({
+          barcode: null,
+          per100: { kcal: 400, protein: 60, fat: 30, carbs: 30 },
+        }),
+      );
+      expect(response.status).toBe(400);
+      expect(body.errors?.[0]?.path).toBe('per100');
+    });
+
+    it('answers 409 with the existing food for a second private one', async () => {
+      const { response, body } = await call(
+        'POST',
+        '/v1/foods',
+        as(BOB),
+        serek(),
+      );
+      expect(response.status).toBe(409);
+      expect(body.existingFoodId).toBe(bobsFood);
+    });
+
+    it('lets exactly one of two simultaneous public foods win (unique index)', async () => {
+      const racers = await Promise.all(
+        [ALICE, CAROL].map((user) =>
+          call(
+            'POST',
+            '/v1/foods',
+            as(user, true),
+            serek({ names: { pl: 'Serek wspólny' }, visibility: 'public' }),
+          ),
+        ),
+      );
+      const statuses = racers.map(({ response }) => response.status).sort();
+      expect(statuses).toEqual([201, 409]);
+      const winner = racers.find(({ response }) => response.status === 201);
+      const loser = racers.find(({ response }) => response.status === 409);
+      expect(loser?.body.existingFoodId).toBe(winner?.body.id);
+      alicesFood = winner?.body.id ?? '';
+    });
+
+    it('ranks your own copy first in barcode lookup', async () => {
+      const bob = await call('GET', `/v1/foods/barcode/${BARCODE}`, as(BOB));
+      expect(bob.body.food).toMatchObject({ id: bobsFood, mine: true });
+      expect(bob.body.alternatives.map((food) => food.id)).toEqual([
+        alicesFood,
+      ]);
+      // Others don't see Bob's private food at all
+      const anonymous = await call('GET', `/v1/foods/barcode/${BARCODE}`);
+      expect(anonymous.body.food.id).toBe(alicesFood);
+      expect(anonymous.body.alternatives).toEqual([]);
+    });
+
+    it("finds your private foods in search, and nobody else's", async () => {
+      const path = '/v1/foods?q=serek%20domowy%20bob';
+      const bob = await call('GET', path, as(BOB));
+      expect(bob.body.items[0]).toMatchObject({ id: bobsFood, mine: true });
+      const alice = await call('GET', path, as(ALICE));
+      expect(alice.body.items.map((food) => food.id)).not.toContain(bobsFood);
+    });
+
+    it('lets only the creator change a food', async () => {
+      const change = serek({ per100: { kcal: 101 } });
+      // Visible to Bob but not his: 403 with a hint to copy it
+      const forbidden = await call(
+        'PUT',
+        `/v1/foods/${alicesFood}`,
+        as(BOB),
+        change,
+      );
+      expect(forbidden.response.status).toBe(403);
+      expect(forbidden.body.detail).toMatch(/copy/);
+      const changed = await call(
+        'PUT',
+        `/v1/foods/${bobsFood}`,
+        as(BOB),
+        change,
+      );
+      expect(changed.response.status).toBe(200);
+      expect(changed.body.per100.kcal).toBe(101);
+      // Making it public still needs the contributor role
+      const publish = await call(
+        'PUT',
+        `/v1/foods/${bobsFood}`,
+        as(BOB),
+        serek({ visibility: 'public' }),
+      );
+      expect(publish.response.status).toBe(403);
+    });
+
+    it('creates a personal copy of an imported food', async () => {
+      const imported = await call('GET', '/v1/foods/barcode/5900512300108');
+      const original = imported.body.food;
+      const { response, body } = await call(
+        'POST',
+        '/v1/foods',
+        as(BOB),
+        serek({
+          names: original.names,
+          barcode: '5900512300108',
+          basedOnId: original.id,
+          per100: { kcal: 120 },
+        }),
+      );
+      expect(response.status).toBe(201);
+      expect(body).toMatchObject({ basedOnId: original.id, mine: true });
+      // Bob now gets his version first; the import stays an alternative
+      const lookup = await call(
+        'GET',
+        '/v1/foods/barcode/5900512300108',
+        as(BOB),
+      );
+      expect(lookup.body.food.id).toBe(body.id);
+      expect(lookup.body.alternatives.map((food) => food.id)).toContain(
+        original.id,
+      );
+    });
+
+    it("can't change an imported food", async () => {
+      const imported = await call('GET', '/v1/foods/barcode/5900512300108');
+      const { response } = await call(
+        'DELETE',
+        `/v1/foods/${imported.body.food.id}`,
+        as(ALICE, true),
+      );
+      expect(response.status).toBe(403);
+    });
+
+    it('retires instead of deleting', async () => {
+      const path = `/v1/foods/${bobsFood}`;
+      expect((await call('DELETE', path, as(BOB))).response.status).toBe(204);
+      // Still readable by id (diary entries refer to it), but no longer offered
+      expect((await call('GET', path, as(BOB))).body.retired).toBe(true);
+      const lookup = await call('GET', `/v1/foods/barcode/${BARCODE}`, as(BOB));
+      expect(lookup.body.food.id).toBe(alicesFood);
     });
   });
 

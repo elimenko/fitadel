@@ -1,3 +1,4 @@
+import type { Viewer } from '../auth/viewer';
 import type { Food as FoodRow, FoodServing } from '../generated/prisma/client';
 import { pickName } from './display-name';
 import type { Food } from './food.dto';
@@ -6,6 +7,7 @@ import type { Food } from './food.dto';
 export function toFood(
   row: FoodRow & { servings: FoodServing[] },
   languages: string[],
+  viewer: Viewer | null,
 ): Food {
   const names = row.names as Record<string, string>;
   return {
@@ -33,5 +35,9 @@ export function toFood(
       amount: serving.amount.toNumber(),
     })),
     countries: row.countries,
+    visibility: row.visibility,
+    mine: viewer !== null && row.ownerId === viewer.id,
+    basedOnId: row.basedOnId,
+    retired: row.retiredAt !== null,
   };
 }

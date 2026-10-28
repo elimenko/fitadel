@@ -20,6 +20,22 @@ export interface ProblemDetails {
   instance: string;
   /** Validation errors, one per invalid field */
   errors?: { path: string; message: string }[];
+  /** RFC 9457 extension members, e.g. existingFoodId */
+  [extension: string]: unknown;
+}
+
+/**
+ * An HTTP error that carries extra problem-details members, e.g.
+ * new ProblemException(409, 'Someone already added it', { existingFoodId }).
+ */
+export class ProblemException extends HttpException {
+  constructor(
+    status: number,
+    detail: string,
+    readonly extensions: Record<string, unknown> = {},
+  ) {
+    super(detail, status);
+  }
 }
 
 @Catch()
@@ -74,6 +90,7 @@ export function toProblem(
       ...base(status, instance),
       // Nest's generic messages ("Not Found") repeat the title; keep only real details
       ...(detail && detail !== STATUS_CODES[status] ? { detail } : {}),
+      ...(exception instanceof ProblemException ? exception.extensions : {}),
     };
   }
   // Unexpected errors: no internals in the response (they're logged instead)
