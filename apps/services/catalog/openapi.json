@@ -390,6 +390,24 @@
         "operationId": "FoodController_search_v1",
         "parameters": [
           {
+            "name": "X-Dev-Roles",
+            "in": "header",
+            "description": "Development only: \"contributor\" may add public foods",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Dev-User-Id",
+            "in": "header",
+            "description": "Development only (AUTH_MODE=dev-headers), until Phase 2 brings logins: the user, as a UUID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "description": "Chooses the display name, e.g. \"ru-RU,ru;q=0.9,en;q=0.8\"",
@@ -434,7 +452,7 @@
         ],
         "responses": {
           "200": {
-            "description": "A page of matching foods",
+            "description": "A page of matching foods (with the user's own private ones)",
             "content": {
               "application/json": {
                 "schema": {
@@ -455,12 +473,135 @@
           }
         },
         "tags": ["foods"]
+      },
+      "post": {
+        "operationId": "FoodController_create_v1",
+        "parameters": [
+          {
+            "name": "X-Dev-Roles",
+            "in": "header",
+            "description": "Development only: \"contributor\" may add public foods",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Dev-User-Id",
+            "in": "header",
+            "description": "Development only (AUTH_MODE=dev-headers), until Phase 2 brings logins: the user, as a UUID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "Chooses the display name, e.g. \"ru-RU,ru;q=0.9,en;q=0.8\"",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFoodDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created; the Location header points to it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoodDto_Output"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, or a mistyped barcode",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No user (until Phase 2: send X-Dev-User-Id)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Public foods need the contributor role",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "basedOnId: no such food to copy",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The barcode is taken; existingFoodId names the food that holds it",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["foods"]
       }
     },
     "/v1/foods/barcode/{code}": {
       "get": {
         "operationId": "FoodController_findByBarcode_v1",
         "parameters": [
+          {
+            "name": "X-Dev-Roles",
+            "in": "header",
+            "description": "Development only: \"contributor\" may add public foods",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Dev-User-Id",
+            "in": "header",
+            "description": "Development only (AUTH_MODE=dev-headers), until Phase 2 brings logins: the user, as a UUID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "Accept-Language",
             "in": "header",
@@ -504,6 +645,266 @@
           },
           "404": {
             "description": "Neither the catalog nor Open Food Facts has a usable food with this barcode",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["foods"]
+      }
+    },
+    "/v1/foods/{id}": {
+      "get": {
+        "operationId": "FoodController_findById_v1",
+        "parameters": [
+          {
+            "name": "X-Dev-Roles",
+            "in": "header",
+            "description": "Development only: \"contributor\" may add public foods",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Dev-User-Id",
+            "in": "header",
+            "description": "Development only (AUTH_MODE=dev-headers), until Phase 2 brings logins: the user, as a UUID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "Chooses the display name, e.g. \"ru-RU,ru;q=0.9,en;q=0.8\"",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The food, also when retired (diary entries refer to it)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoodDto_Output"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such food, or it's someone else's private food",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["foods"]
+      },
+      "put": {
+        "operationId": "FoodController_replace_v1",
+        "parameters": [
+          {
+            "name": "X-Dev-Roles",
+            "in": "header",
+            "description": "Development only: \"contributor\" may add public foods",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Dev-User-Id",
+            "in": "header",
+            "description": "Development only (AUTH_MODE=dev-headers), until Phase 2 brings logins: the user, as a UUID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "Chooses the display name, e.g. \"ru-RU,ru;q=0.9,en;q=0.8\"",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceFoodDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replaced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoodDto_Output"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, or a mistyped barcode",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No user",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not your food (create your own copy instead), or public needs the contributor role",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such food, or it's someone else's private food",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The barcode is taken",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["foods"]
+      },
+      "delete": {
+        "operationId": "FoodController_retire_v1",
+        "parameters": [
+          {
+            "name": "X-Dev-Roles",
+            "in": "header",
+            "description": "Development only: \"contributor\" may add public foods",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Dev-User-Id",
+            "in": "header",
+            "description": "Development only (AUTH_MODE=dev-headers), until Phase 2 brings logins: the user, as a UUID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "Chooses the display name, e.g. \"ru-RU,ru;q=0.9,en;q=0.8\"",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Retired: no longer offered, still readable by id"
+          },
+          "401": {
+            "description": "No user",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not your food",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such food, or it's someone else's private food",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -700,6 +1101,32 @@
               "type": "string"
             },
             "description": "Where it is sold, e.g. [\"poland\", \"ireland\"]"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": ["public", "private"],
+            "description": "private = only its owner sees it"
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "Created by the current user"
+          },
+          "basedOnId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The food this one was copied from (a personal correction)"
+          },
+          "retired": {
+            "type": "boolean",
+            "description": "No longer offered (gone from the source, or retired by its owner); still readable by id"
           }
         },
         "required": [
@@ -714,7 +1141,11 @@
           "per100",
           "otherNutrients",
           "servings",
-          "countries"
+          "countries",
+          "visibility",
+          "mine",
+          "basedOnId",
+          "retired"
         ],
         "additionalProperties": false
       },
@@ -750,7 +1181,6 @@
         "type": "object",
         "properties": {
           "food": {
-            "description": "The best match",
             "$ref": "#/components/schemas/Food_Output"
           },
           "alternatives": {
@@ -762,8 +1192,584 @@
           }
         },
         "required": ["food", "alternatives"],
-        "description": "A barcode lookup result",
+        "description": "A barcode lookup result: the best match (food), plus alternatives",
         "additionalProperties": false
+      },
+      "FoodDto_Output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "source": {
+            "type": "string",
+            "enum": ["off", "usda", "user"],
+            "description": "off = Open Food Facts, user = entered by a user"
+          },
+          "sourceRef": {
+            "description": "The id at the source, e.g. the Open Food Facts code",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "barcode": {
+            "description": "GTIN-14: 14 digits, zero-padded",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name: the first Accept-Language with a name, else Polish, English or any"
+          },
+          "names": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "All names by language code, e.g. { \"pl\": \"Twaróg\" }"
+          },
+          "brand": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "basis": {
+            "type": "string",
+            "enum": ["g", "ml"],
+            "description": "Nutrient values are per 100 g or per 100 ml"
+          },
+          "per100": {
+            "type": "object",
+            "properties": {
+              "kcal": {
+                "type": "number"
+              },
+              "protein": {
+                "description": "Grams; null when unknown (not 0)",
+                "type": ["number", "null"]
+              },
+              "fat": {
+                "description": "Grams; null when unknown (not 0)",
+                "type": ["number", "null"]
+              },
+              "carbs": {
+                "description": "Grams; null when unknown (not 0)",
+                "type": ["number", "null"]
+              },
+              "sugars": {
+                "description": "Grams; null when unknown (not 0)",
+                "type": ["number", "null"]
+              },
+              "fiber": {
+                "description": "Grams; null when unknown (not 0)",
+                "type": ["number", "null"]
+              },
+              "saturatedFat": {
+                "description": "Grams; null when unknown (not 0)",
+                "type": ["number", "null"]
+              },
+              "salt": {
+                "description": "Grams; null when unknown (not 0)",
+                "type": ["number", "null"]
+              }
+            },
+            "required": [
+              "kcal",
+              "protein",
+              "fat",
+              "carbs",
+              "sugars",
+              "fiber",
+              "saturatedFat",
+              "salt"
+            ],
+            "additionalProperties": false
+          },
+          "otherNutrients": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "number"
+                },
+                "unit": {
+                  "type": "string"
+                }
+              },
+              "required": ["value", "unit"],
+              "additionalProperties": false
+            },
+            "description": "Vitamins, minerals etc. per 100 g or 100 ml, for display"
+          },
+          "servings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "number",
+                  "description": "In the basis unit (g or ml)"
+                }
+              },
+              "required": ["label", "amount"],
+              "additionalProperties": false
+            }
+          },
+          "countries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Where it is sold, e.g. [\"poland\", \"ireland\"]"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": ["public", "private"],
+            "description": "private = only its owner sees it"
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "Created by the current user"
+          },
+          "basedOnId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The food this one was copied from (a personal correction)"
+          },
+          "retired": {
+            "type": "boolean",
+            "description": "No longer offered (gone from the source, or retired by its owner); still readable by id"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "sourceRef",
+          "barcode",
+          "name",
+          "names",
+          "brand",
+          "basis",
+          "per100",
+          "otherNutrients",
+          "servings",
+          "countries",
+          "visibility",
+          "mine",
+          "basedOnId",
+          "retired"
+        ],
+        "additionalProperties": false
+      },
+      "CreateFoodDto": {
+        "type": "object",
+        "properties": {
+          "names": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z]{2}$"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Names by language, e.g. { \"pl\": \"Mój serek\", \"ru\": \"Мой сырок\" }"
+          },
+          "brand": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "barcode": {
+            "default": null,
+            "description": "As printed; stored as GTIN-14",
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{8,14}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "basis": {
+            "default": "g",
+            "type": "string",
+            "enum": ["g", "ml"]
+          },
+          "per100": {
+            "type": "object",
+            "properties": {
+              "kcal": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              "protein": {
+                "default": null,
+                "description": "Grams per 100 g or 100 ml; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fat": {
+                "default": null,
+                "description": "Grams per 100 g or 100 ml; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "carbs": {
+                "default": null,
+                "description": "Grams per 100 g or 100 ml; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sugars": {
+                "default": null,
+                "description": "Grams per 100 g or 100 ml; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fiber": {
+                "default": null,
+                "description": "Grams per 100 g or 100 ml; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "saturatedFat": {
+                "default": null,
+                "description": "Grams per 100 g or 100 ml; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "salt": {
+                "default": null,
+                "description": "Grams per 100 g or 100 ml; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": ["kcal"]
+          },
+          "servings": {
+            "default": [],
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "amount": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 10000
+                }
+              },
+              "required": ["label", "amount"]
+            }
+          },
+          "visibility": {
+            "default": "private",
+            "description": "public (for everyone) needs the contributor role",
+            "type": "string",
+            "enum": ["public", "private"]
+          },
+          "basedOnId": {
+            "default": null,
+            "description": "Copy of this food: \"editing\" a food you can't change creates your own version",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["names", "per100"]
+      },
+      "ReplaceFoodDto": {
+        "type": "object",
+        "properties": {
+          "names": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z]{2}$"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Names by language, e.g. { \"pl\": \"Mój serek\", \"ru\": \"Мой сырок\" }"
+          },
+          "brand": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "barcode": {
+            "default": null,
+            "description": "As printed; stored as GTIN-14",
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{8,14}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "basis": {
+            "default": "g",
+            "type": "string",
+            "enum": ["g", "ml"]
+          },
+          "per100": {
+            "type": "object",
+            "properties": {
+              "kcal": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              "protein": {
+                "default": null,
+                "description": "Grams per 100 g or 100 ml; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fat": {
+                "default": null,
+                "description": "Grams per 100 g or 100 ml; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "carbs": {
+                "default": null,
+                "description": "Grams per 100 g or 100 ml; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sugars": {
+                "default": null,
+                "description": "Grams per 100 g or 100 ml; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fiber": {
+                "default": null,
+                "description": "Grams per 100 g or 100 ml; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "saturatedFat": {
+                "default": null,
+                "description": "Grams per 100 g or 100 ml; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "salt": {
+                "default": null,
+                "description": "Grams per 100 g or 100 ml; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": ["kcal"]
+          },
+          "servings": {
+            "default": [],
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "amount": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 10000
+                }
+              },
+              "required": ["label", "amount"]
+            }
+          },
+          "visibility": {
+            "default": "private",
+            "description": "public (for everyone) needs the contributor role",
+            "type": "string",
+            "enum": ["public", "private"]
+          }
+        },
+        "required": ["names", "per100"]
       }
     }
   }

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env';
 import { OffClient } from '../off/off-client';
 import { PrismaModule } from '../prisma/prisma.module';
+import { CustomFoodService } from './custom-food.service';
 import { FoodSearch } from './food-search';
 import { FoodController } from './food.controller';
 import { FoodService } from './food.service';
@@ -14,6 +15,7 @@ import { PostgresFoodSearch } from './postgres-food-search';
   controllers: [FoodController],
   providers: [
     FoodService,
+    CustomFoodService,
     OffLookupService,
     // The search implementation: swap here for a search engine (ADR-0006)
     { provide: FoodSearch, useClass: PostgresFoodSearch },

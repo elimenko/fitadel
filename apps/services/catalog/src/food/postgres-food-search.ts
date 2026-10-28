@@ -17,10 +17,12 @@ export class PostgresFoodSearch extends FoodSearch {
     text,
     limit,
     offset,
+    viewerId,
   }: {
     text: string;
     limit: number;
     offset: number;
+    viewerId: string | null;
   }): Promise<string[]> {
     // $queryRaw sends every ${...} as a bound parameter, never as SQL text.
     // The expressions must match the index definitions exactly, or the planner won't
@@ -38,10 +40,15 @@ export class PostgresFoodSearch extends FoodSearch {
       SELECT food.id
       FROM food, q
       WHERE food.retired_at IS NULL
-        AND food.visibility = 'public'
+        -- Public foods, plus the viewer's own private ones (owner_id = NULL is never true)
+        AND (food.visibility = 'public' OR food.owner_id = ${viewerId}::uuid)
         AND (q.norm <% food_search_text(food.names, food.brand)
              OR to_tsvector('simple', food_search_text(food.names, food.brand)) @@ q.prefix)
-      ORDER BY ('poland' = ANY(food.countries)) DESC,
+      ORDER BY
+               -- The viewer's own foods first, then community foods and foods sold in
+               -- Poland (user foods have no country tags)
+               (food.owner_id = ${viewerId}::uuid) IS TRUE DESC,
+               (food.source = 'user' OR 'poland' = ANY(food.countries)) DESC,
                word_similarity(q.norm, food_search_text(food.names, food.brand)) DESC,
                food.popularity DESC,
                -- A deterministic last key, so pages don't overlap or skip rows
