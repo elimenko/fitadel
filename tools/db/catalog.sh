@@ -9,4 +9,5 @@ psql -v ON_ERROR_STOP=1 \
   --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
   -v migrator_password="$CATALOG_MIGRATOR_PASSWORD" \
   -v app_password="$CATALOG_APP_PASSWORD" \
+  -v reader_password="$CATALOG_READER_PASSWORD" \
   -f "$(dirname "${BASH_SOURCE[0]}")/catalog.psql"
