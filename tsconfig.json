@@ -8,6 +8,9 @@
     },
     {
       "path": "./apps/services/catalog"
+    },
+    {
+      "path": "./apps/services/identity"
     }
   ],
   "compilerOptions": {}
