@@ -18,7 +18,6 @@ export const OIDC_PROVIDER = Symbol('OIDC_PROVIDER');
       useFactory: (config: ConfigService<Env, true>, prisma: PrismaService) =>
         createProvider({
           env: {
-            NODE_ENV: config.get('NODE_ENV', { infer: true }),
             OIDC_ISSUER: config.get('OIDC_ISSUER', { infer: true }),
             OIDC_API_AUDIENCE: config.get('OIDC_API_AUDIENCE', { infer: true }),
             OIDC_JWKS: config.get('OIDC_JWKS', { infer: true }),
