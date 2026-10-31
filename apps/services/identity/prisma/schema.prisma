@@ -1,5 +1,5 @@
-// Identity data model: accounts and how they sign in. oidc-provider's own storage
-// (codes, sessions, grants, refresh tokens) arrives in Phase 2 Step 2c.
+// Identity data model: accounts and how they sign in, plus oidc-provider's own storage
+// (codes, sessions, grants, refresh tokens) in oidc_payload.
 // Hand-written SQL in the migrations adds what Prisma can't express: CHECK constraints
 // and the grants for identity_reader, which only sees tables granted explicitly
 // (tools/db/identity.psql).
@@ -75,4 +75,33 @@ model AccountRole {
 
   @@id([accountId, role])
   @@map("account_role")
+}
+
+/// oidc-provider's storage: one row per object the engine keeps (authorization code,
+/// session, grant, refresh token, interaction, …). The engine owns the payload's shape;
+/// the columns exist for the lookups and the atomic consume.
+/// Secret: never granted to identity_reader.
+model OidcPayload {
+  /// The engine's model name, e.g. AuthorizationCode, RefreshToken, Session
+  model      String
+  /// SHA-256 of the engine's id. For codes and tokens the id is the secret itself, so a
+  /// leaked backup must not contain it.
+  id         Bytes     @db.ByteA
+  payload    Json
+  /// Set on codes and tokens; revoking a grant deletes all of its rows
+  grantId    String?   @map("grant_id")
+  /// Set on sessions (the engine looks them up by uid)
+  uid        String?
+  /// Device flow only (disabled), kept so the adapter interface is complete
+  userCode   String?   @map("user_code")
+  /// NULL for objects without an expiry
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz
+  /// Set once, atomically, when a code or refresh token is used
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz
+
+  @@id([model, id])
+  @@index([grantId])
+  @@index([uid])
+  @@index([expiresAt])
+  @@map("oidc_payload")
 }
