@@ -22,8 +22,8 @@ UI/UX is designed mobile-first on every platform.
 
 ### Phase 2: Identity
 
-- [ ] OpenID Connect provider (authorization code + PKCE)
-- [ ] User accounts and sign-in
+- [x] OpenID Connect provider (authorization code + PKCE)
+- [x] User accounts and sign-in
 - [ ] Email verification and password reset
 - [ ] API gateway (Envoy): routing, token validation at the edge, rate limiting
 - [ ] Sign-in with Google (federated identity)
