@@ -1,0 +1,78 @@
+// Identity data model: accounts and how they sign in. oidc-provider's own storage
+// (codes, sessions, grants, refresh tokens) arrives in Phase 2 Step 2c.
+// Hand-written SQL in the migrations adds what Prisma can't express: CHECK constraints
+// and the grants for identity_reader, which only sees tables granted explicitly
+// (tools/db/identity.psql).
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  contributor
+
+  @@map("role")
+}
+
+model Account {
+  /// Also the `sub` claim in tokens
+  id              String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// Login name, stored trimmed and lowercased (a CHECK in the migration enforces it)
+  email           String    @unique
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
+  displayName     String?   @map("display_name")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  password     AccountPassword?
+  identities   AccountIdentity[]
+  roles        AccountRole[]     @relation("roles")
+  rolesGranted AccountRole[]     @relation("grantedBy")
+
+  @@map("account")
+}
+
+/// Secret: not granted to identity_reader
+model AccountPassword {
+  accountId String   @id @map("account_id") @db.Uuid
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// PHC string: $argon2id$v=19$m=…,t=…,p=…$<salt>$<hash>
+  hash      String
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("account_password")
+}
+
+/// Sign-in through an external provider (Google in Phase 2 Step 5)
+model AccountIdentity {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  accountId String   @map("account_id") @db.Uuid
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// The provider's `iss`, e.g. https://accounts.google.com
+  issuer    String
+  /// The provider's `sub` for this person
+  subject   String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([issuer, subject])
+  @@index([accountId])
+  @@map("account_identity")
+}
+
+model AccountRole {
+  accountId   String   @map("account_id") @db.Uuid
+  account     Account  @relation("roles", fields: [accountId], references: [id], onDelete: Cascade)
+  role        Role
+  grantedAt   DateTime @default(now()) @map("granted_at") @db.Timestamptz
+  /// NULL when granted by a script rather than a person
+  grantedById String?  @map("granted_by") @db.Uuid
+  grantedBy   Account? @relation("grantedBy", fields: [grantedById], references: [id], onDelete: SetNull)
+
+  @@id([accountId, role])
+  @@map("account_role")
+}
