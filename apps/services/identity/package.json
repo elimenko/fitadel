@@ -156,6 +156,12 @@
             ]
           }
         ]
+      },
+      "generate-keys": {
+        "command": "node scripts/generate-keys.mjs .env",
+        "options": {
+          "cwd": "{projectRoot}"
+        }
       }
     },
     "tags": [
