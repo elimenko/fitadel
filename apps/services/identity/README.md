@@ -8,7 +8,7 @@ service trusts. Built with NestJS and
 with the other components: [docs/architecture/authentication.md](../../../docs/architecture/authentication.md).
 
 > **Status:** Phase 2 in progress. The OpenID Provider runs at `/oidc` with a
-> sign-in page; registration comes next.
+> sign-in and registration pages; email verification comes next.
 
 ## Running it
 
@@ -53,6 +53,8 @@ When the provider needs the user, it redirects the browser to `/interaction/<uid
   scripts and only the pages' own stylesheet (by its hash).
 - **Sign-in** checks the password with `PasswordHasher` and shows one message for an
   unknown email and a wrong password. Outdated hashes are upgraded on success.
+- **Registration** creates the account and signs the user in. It reveals when an email
+  already has an account; Step 2f replaces that with "check your email" in both cases.
 - **Consent is automatic**: every client is first-party, so the grant gets what the
   request asks for. A third-party client would need a consent page.
 - **The interaction cookie ties a `uid` to the browser** that started it, so a form
@@ -99,6 +101,11 @@ when its last token has expired (10 minutes for access and ID tokens).
 Hashed with **argon2id**, OWASP's baseline parameters: 19 MiB of memory, 2 passes,
 1 lane ([password-hasher.ts](src/account/password-hasher.ts)).
 
+- **New passwords** ([password-policy.ts](src/account/password-policy.ts)): at least 8
+  characters, at most 256, no composition rules (OWASP ASVS 5.0), and not found in a
+  data breach. The breach check uses Have I Been Pwned's range API: only the first 5
+  characters of the password's SHA-1 leave the service (k-anonymity). It fails open:
+  when the API is unreachable, the password is allowed and a warning logged.
 - **Stored as PHC strings** (`$argon2id$v=19$m=19456,t=2,p=1$<salt>$<hash>`). Every hash
   carries its own random salt and parameters. A `CHECK` rejects anything else, so a
   plain-text password can't be stored by mistake.

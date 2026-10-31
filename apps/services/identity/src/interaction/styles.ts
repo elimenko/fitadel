@@ -10,6 +10,7 @@ form { display: grid; gap: 8px; }
 input, button { font: inherit; padding: 10px; border-radius: 6px; }
 input { border: 1px solid GrayText; }
 button { margin-top: 8px; border: 0; background: #2f6f4f; color: white; cursor: pointer; }
+.hint { margin: 0; font-size: 0.875rem; color: GrayText; }
 .error { padding: 10px; border-radius: 6px; background: #fde8e8; color: #8a1c1c; }
 `;
 

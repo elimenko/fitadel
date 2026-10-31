@@ -13,7 +13,10 @@ import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from 'pg';
+import { AccountService } from './account/account.service';
+import { PasswordHasher } from './account/password-hasher';
 import { PrismaClient } from './generated/prisma/client';
+import type { PrismaService } from './prisma/prisma.service';
 import {
   deleteExpiredOidcPayloads,
   oidcPayloadAdapterFactory,
@@ -243,5 +246,59 @@ describe('oidc-provider storage', () => {
 
     expect(await adapterFor('RefreshToken').find(refresh)).toBeUndefined();
     expect(await adapterFor('AuthorizationCode').find(code)).toBeDefined();
+  });
+});
+
+describe('registration', () => {
+  let db: PrismaClient;
+  let accounts: AccountService;
+
+  beforeAll(() => {
+    db = new PrismaClient({
+      adapter: new PrismaPg({ connectionString: urls.app }),
+    });
+    accounts = new AccountService(
+      db as unknown as PrismaService,
+      new PasswordHasher(),
+    );
+  });
+
+  afterAll(async () => {
+    await db.$disconnect();
+  });
+
+  it('lets exactly one of two simultaneous registrations of an email win', async () => {
+    const register = () =>
+      accounts.register({
+        email: 'Twin@Fitadel.local',
+        password: 'river cat lantern',
+      });
+
+    const results = await Promise.all([register(), register()]);
+
+    expect(results).toEqual(
+      expect.arrayContaining([
+        { accountId: expect.any(String) },
+        { error: 'email_taken' },
+      ]),
+    );
+    expect(
+      await db.account.count({ where: { email: 'twin@fitadel.local' } }),
+    ).toBe(1);
+  });
+
+  it('signs in with the registered password', async () => {
+    const registered = await accounts.register({
+      email: 'new@fitadel.local',
+      password: 'river cat lantern',
+      displayName: 'New User',
+    });
+
+    expect(
+      await accounts.signIn('NEW@fitadel.local', 'river cat lantern'),
+    ).toBe('accountId' in registered ? registered.accountId : '-');
+    expect(
+      await accounts.signIn('new@fitadel.local', 'river cat lanterns'),
+    ).toBeUndefined();
   });
 });

@@ -37,6 +37,19 @@ export const envSchema = z.object({
   /** Runtime connection, as the identity_app role */
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   /**
+   * Reject passwords found in data breaches (Have I Been Pwned). "disabled" is for
+   * offline development; the check fails open when the API is unreachable anyway.
+   */
+  PASSWORD_BREACH_CHECK: z.enum(['enabled', 'disabled']).default('enabled'),
+  HIBP_API_URL: z.url().default('https://api.pwnedpasswords.com'),
+  /** Give up and allow the password rather than keep a registering user waiting */
+  HIBP_TIMEOUT_MS: z.coerce.number().int().positive().default(2000),
+  /** How the service identifies itself to external APIs */
+  OUTBOUND_USER_AGENT: z
+    .string()
+    .min(1)
+    .default('Fitadel/0.1 (+https://github.com/elimenko/fitadel)'),
+  /**
    * The provider's public URL, mount path included: the `iss` claim every verifier
    * checks, so it must match exactly what clients see (the gateway's URL behind one)
    */
