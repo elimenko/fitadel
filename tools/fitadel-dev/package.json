@@ -1,0 +1,61 @@
+{
+  "name": "@fitadel/fitadel-dev",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "name": "fitadel-dev",
+    "targets": {
+      "test": {
+        "options": {
+          "passWithNoTests": true
+        }
+      },
+      "login": {
+        "command": "node dist/main.js login",
+        "options": {
+          "cwd": "{projectRoot}",
+          "forwardAllArgs": true
+        },
+        "dependsOn": [
+          "build"
+        ]
+      },
+      "token": {
+        "command": "node dist/main.js token",
+        "options": {
+          "cwd": "{projectRoot}",
+          "forwardAllArgs": true
+        },
+        "dependsOn": [
+          "build"
+        ]
+      },
+      "whoami": {
+        "command": "node dist/main.js whoami",
+        "options": {
+          "cwd": "{projectRoot}",
+          "forwardAllArgs": true
+        },
+        "dependsOn": [
+          "build"
+        ]
+      },
+      "logout": {
+        "command": "node dist/main.js logout",
+        "options": {
+          "cwd": "{projectRoot}",
+          "forwardAllArgs": true
+        },
+        "dependsOn": [
+          "build"
+        ]
+      }
+    },
+    "tags": [
+      "platform:node"
+    ]
+  },
+  "dependencies": {
+    "openid-client": "6.8.8"
+  }
+}
