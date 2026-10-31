@@ -2,6 +2,7 @@ import type { LoggerService } from '@nestjs/common';
 import type { EventEmitter } from 'node:events';
 import Provider, {
   type Account,
+  type ClientMetadata,
   type Configuration,
   type KoaContextWithOIDC,
   errors,
@@ -14,6 +15,20 @@ import { oidcPayloadAdapterFactory } from './oidc-payload-adapter';
 export const API_SCOPE = 'api';
 
 const ACCESS_TOKEN_TTL = 10 * 60;
+
+/**
+ * Local tools and manual testing (tools/fitadel-dev): a public client (no secret) on a
+ * loopback redirect whose port varies per run (RFC 8252).
+ */
+const DEV_CLIENT: ClientMetadata = {
+  client_id: 'fitadel-dev',
+  application_type: 'native',
+  token_endpoint_auth_method: 'none',
+  redirect_uris: ['http://127.0.0.1/'],
+  grant_types: ['authorization_code', 'refresh_token'],
+  response_types: ['code'],
+  id_token_signed_response_alg: 'ES256',
+};
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -32,7 +47,11 @@ const ERROR_EVENTS = [
 export interface ProviderOptions {
   env: Pick<
     Env,
-    'OIDC_ISSUER' | 'OIDC_API_AUDIENCE' | 'OIDC_JWKS' | 'OIDC_COOKIE_KEYS'
+    | 'NODE_ENV'
+    | 'OIDC_ISSUER'
+    | 'OIDC_API_AUDIENCE'
+    | 'OIDC_JWKS'
+    | 'OIDC_COOKIE_KEYS'
   >;
   prisma: PrismaClient;
   logger: LoggerService;
@@ -55,19 +74,8 @@ export function createProvider({
     jwks: env.OIDC_JWKS,
     cookies: { keys: env.OIDC_COOKIE_KEYS },
 
-    clients: [
-      {
-        // Local tools and manual testing: a public client (no secret) on a loopback
-        // redirect, whose port may vary per run (RFC 8252)
-        client_id: 'fitadel-dev',
-        application_type: 'native',
-        token_endpoint_auth_method: 'none',
-        redirect_uris: ['http://127.0.0.1/'],
-        grant_types: ['authorization_code', 'refresh_token'],
-        response_types: ['code'],
-        id_token_signed_response_alg: 'ES256',
-      },
-    ],
+    // Anyone can run fitadel-dev, so it never exists in production
+    clients: env.NODE_ENV === 'production' ? [] : [DEV_CLIENT],
     // Authorization code flow only: no implicit or hybrid tokens in the redirect
     responseTypes: ['code'],
     // PKCE for every client, confidential ones included (OAuth 2.1)
