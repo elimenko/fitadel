@@ -7,8 +7,8 @@ service trusts. Built with NestJS and
 ([ADR-0007](../../../docs/adr/0007-prisma-database-access.md)) on PostgreSQL. How it fits
 with the other components: [docs/architecture/authentication.md](../../../docs/architecture/authentication.md).
 
-> **Status:** Phase 2 in progress. Accounts and password hashing exist; the OpenID
-> Provider endpoints and the sign-in screens come next.
+> **Status:** Phase 2 in progress. The OpenID Provider runs at `/oidc` with a
+> development-only sign-in page; the real sign-in screens come next.
 
 ## Running it
 
@@ -17,6 +17,7 @@ Prerequisites: the local infrastructure from the [root README](../../../README.m
 
 ```sh
 cp apps/services/identity/.env.example apps/services/identity/.env
+pnpm nx run identity:generate-keys            # signing and cookie keys, into .env
 pnpm nx run identity:prisma migrate deploy   # apply migrations
 pnpm nx serve identity                       # http://localhost:3010
 ```
@@ -24,7 +25,46 @@ pnpm nx serve identity                       # http://localhost:3010
 | Target                          | What it does                         |
 | ------------------------------- | ------------------------------------ |
 | `nx test identity`              | unit tests                           |
+| `nx run identity:integration`   | tests against a throwaway Postgres   |
 | `nx run identity:prisma <args>` | the Prisma CLI, as the migrator role |
+| `nx run identity:generate-keys` | local signing and cookie keys        |
+
+## OpenID Provider
+
+[oidc-provider](https://github.com/panva/node-oidc-provider) is mounted at `/oidc`
+([provider.ts](src/oidc/provider.ts)); discovery is at
+`/oidc/.well-known/openid-configuration`.
+
+- **Authorization code with PKCE only**, for every client. Access tokens are ES256 JWTs
+  for the API (`aud` = `OIDC_API_AUDIENCE`) with the account's `roles`; refresh
+  tokens rotate on every use.
+- **Errors are generic for clients** (`invalid_grant`); the cause is logged as
+  `detail`. Request parameters are never logged: they hold codes and tokens.
+- **Until the sign-in screens exist**, development uses the built-in page: the login
+  is an account id, and any password is accepted. It is disabled outside
+  `NODE_ENV=development`.
+
+### Storage
+
+Codes, sessions, grants and refresh tokens live in `oidc_payload`
+([oidc-payload-adapter.ts](src/oidc/oidc-payload-adapter.ts)):
+
+- **Ids are stored as SHA-256 digests.** A code's or refresh token's id is the secret
+  itself; a `CHECK` accepts only 32-byte digests.
+- **Codes and refresh tokens are consumed atomically** (`UPDATE … WHERE consumed_at IS
+NULL`). Of two concurrent requests with the same code, one gets tokens; the other
+  gets `invalid_grant` and the whole grant is revoked, as on any reuse.
+- Expired rows are invisible and deleted every 10 minutes.
+
+### Keys
+
+- `OIDC_JWKS`: private ES256 keys. The first signs; all are published at
+  `/oidc/jwks`, so services can verify tokens without calling identity.
+- `OIDC_COOKIE_KEYS`: HMAC keys for the provider's cookies.
+
+Rotating a signing key: add the new key **second** (published, not signing yet), move it
+**first** once verifiers have refreshed their cached key sets, and remove the old key
+when its last token has expired (10 minutes for access and ID tokens).
 
 ## Accounts
 
@@ -68,5 +108,5 @@ Each role gets only what it needs ([tools/db/identity.psql](../../../tools/db/id
 | `identity_reader`   | read rows in **explicitly granted** tables; read-only sessions | people, in SQL clients |
 
 Unlike the catalog's reader, `identity_reader` gets no access to new tables by default:
-this database holds secrets (password hashes, and later refresh tokens and sessions). A
+this database holds secrets (password hashes, refresh tokens, sessions). A
 migration grants each non-secret table explicitly; `account_password` is never granted.
