@@ -1,0 +1,50 @@
+-- Provisions the identity service's database and roles. Idempotent: safe to re-run.
+-- Run through identity.sh, which passes the passwords as psql variables.
+--
+--   identity_migrator  owns the database and every object in it; runs migrations
+--   identity_app       reads and writes rows only; used by the running service
+--   identity_reader    reads rows only, and only in tables a migration explicitly grants;
+--                      for people inspecting data (SQL clients)
+--
+-- Unlike the catalog, identity_reader gets no default SELECT: this database holds
+-- secrets (password hashes, refresh tokens, sessions), so a new table stays invisible
+-- to people until a migration grants it.
+
+-- Postgres has no CREATE ROLE IF NOT EXISTS: build the statement, then \gexec runs it
+SELECT format('CREATE ROLE identity_migrator LOGIN PASSWORD %L', :'migrator_password')
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'identity_migrator') \gexec
+SELECT format('CREATE ROLE identity_app LOGIN PASSWORD %L', :'app_password')
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'identity_app') \gexec
+SELECT format('CREATE ROLE identity_reader LOGIN PASSWORD %L', :'reader_password')
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'identity_reader') \gexec
+
+-- Keep passwords in sync with .env on re-runs
+ALTER ROLE identity_migrator PASSWORD :'migrator_password';
+ALTER ROLE identity_app PASSWORD :'app_password';
+ALTER ROLE identity_reader PASSWORD :'reader_password';
+
+-- Local only: prisma migrate dev creates a temporary shadow database
+ALTER ROLE identity_migrator CREATEDB;
+
+-- A second safety layer for people: their sessions start read-only
+ALTER ROLE identity_reader SET default_transaction_read_only = on;
+
+-- CREATE DATABASE can't run in a transaction block (or a DO block), hence \gexec again
+SELECT 'CREATE DATABASE identity OWNER identity_migrator'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'identity') \gexec
+
+REVOKE ALL ON DATABASE identity FROM PUBLIC;
+GRANT CONNECT ON DATABASE identity TO identity_app, identity_reader;
+
+\connect identity
+
+-- The database owner (identity_migrator) owns schema public; nobody else may create in it
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO identity_app, identity_reader;
+
+-- Grants on objects that identity_migrator creates later, in future migrations.
+-- identity_reader is deliberately absent: migrations grant it table by table.
+ALTER DEFAULT PRIVILEGES FOR ROLE identity_migrator IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO identity_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE identity_migrator IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO identity_app;
