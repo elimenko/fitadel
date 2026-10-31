@@ -37,6 +37,8 @@ UI/UX is designed mobile-first on every platform.
 
 ### Phase 4: Web
 
+- [ ] Design system (tokens, components), wireframes and example pages; shared by the
+      web, Android and the sign-in screens
 - [ ] Module Federation shell and micro-frontends
 - [ ] English and Russian localization
 - [ ] Infrastructure as code on AWS (Terraform)
