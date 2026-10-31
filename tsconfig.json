@@ -11,6 +11,9 @@
     },
     {
       "path": "./apps/services/identity"
+    },
+    {
+      "path": "./tools/fitadel-dev"
     }
   ],
   "compilerOptions": {}
