@@ -131,6 +131,31 @@
         "dependsOn": [
           "prisma-generate"
         ]
+      },
+      "integration": {
+        "command": "jest --config jest.integration.config.cts",
+        "options": {
+          "cwd": "{projectRoot}",
+          "env": {
+            "NODE_OPTIONS": "--experimental-vm-modules"
+          }
+        },
+        "dependsOn": [
+          "prisma-generate"
+        ],
+        "cache": true,
+        "inputs": [
+          "default",
+          "^production",
+          "{workspaceRoot}/tools/db/**",
+          "{workspaceRoot}/compose.yaml",
+          {
+            "externalDependencies": [
+              "@testcontainers/postgresql",
+              "prisma"
+            ]
+          }
+        ]
       }
     },
     "tags": [
@@ -144,6 +169,7 @@
     "@node-rs/argon2": "2.2.2",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
+    "oidc-provider": "9.13.3",
     "pg": "^8.23.1",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0",
