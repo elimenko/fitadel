@@ -65,6 +65,23 @@ pnpm nx run catalog:integration             # integration tests (needs Docker)
 Each service documents itself, e.g. [the catalog](apps/services/catalog/README.md)
 (database roles, the Open Food Facts import).
 
+### Setting up a new machine
+
+Everything machine-specific is gitignored; this recreates it (macOS, Linux, or Windows
+with Git Bash):
+
+1. Install Node.js 24 (`.nvmrc`), run `corepack enable`, install Docker Desktop.
+2. `pnpm install`
+3. `cp .env.example .env` and replace every `change-me` with a random value, e.g.
+   from `openssl rand -hex 24`. They are local only; a fresh volume uses them.
+4. `docker compose up -d`
+5. For each service: copy its `.env.example` to `.env`, then
+   `pnpm nx run <service>:prisma migrate deploy`.
+6. Identity only: `pnpm nx run identity:generate-keys` (signing and cookie keys).
+7. Optional: import foods into the catalog ([catalog README](apps/services/catalog/README.md)),
+   register an account through identity's sign-in page, then
+   `pnpm nx run fitadel-dev:login` ([fitadel-dev](tools/fitadel-dev/README.md)).
+
 ## Repository layout
 
 ```
