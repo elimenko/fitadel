@@ -12,6 +12,7 @@ import {
 import type { Request, Response } from 'express';
 import type Provider from 'oidc-provider';
 import type { InteractionResults } from 'oidc-provider';
+import type { ReactElement } from 'react';
 import { z } from 'zod';
 import { AccountService } from '../account/account.service';
 import {
@@ -21,6 +22,14 @@ import {
   type PasswordProblem,
 } from '../account/password-policy';
 import { OIDC_PROVIDER } from '../oidc/oidc.module';
+import {
+  REGISTER_PER_IP,
+  SIGN_IN_PER_EMAIL,
+  SIGN_IN_PER_IP,
+  emailKey,
+  ipKey,
+} from '../rate-limit/limits';
+import { RateLimiter } from '../rate-limit/rate-limiter';
 import { ErrorPage, RegisterPage, SignInPage } from './pages';
 import { renderPage } from './render';
 
@@ -60,6 +69,7 @@ export class InteractionController {
     @Inject(OIDC_PROVIDER) private readonly provider: Provider,
     private readonly accounts: AccountService,
     private readonly passwords: PasswordPolicy,
+    private readonly limiter: RateLimiter,
   ) {}
 
   @Get(':uid')
@@ -100,6 +110,33 @@ export class InteractionController {
       );
     }
     const { email, password } = form.data;
+    const again = (error: string) => (
+      <SignInPage uid={uid} email={email} error={error} />
+    );
+
+    // Checked before the password: a blocked attempt costs no hash
+    const byIp = await this.limiter.attempt(
+      ipKey('sign-in', req.ip),
+      SIGN_IN_PER_IP,
+    );
+    if (!byIp.allowed) {
+      return this.tooMany(res, 'sign-in:ip', byIp.retryAfterSeconds, again);
+    }
+    // Reserves a slot for this email; a successful sign-in gives it back, so only
+    // failures count. Unknown emails are limited the same way, revealing nothing.
+    const byEmail = await this.limiter.attempt(
+      emailKey('sign-in', email),
+      SIGN_IN_PER_EMAIL,
+    );
+    if (!byEmail.allowed) {
+      return this.tooMany(
+        res,
+        'sign-in:email',
+        byEmail.retryAfterSeconds,
+        again,
+      );
+    }
+
     const accountId = await this.accounts.signIn(email, password);
     if (!accountId) {
       // One message for an unknown email and a wrong password
@@ -113,6 +150,7 @@ export class InteractionController {
         />,
       );
     }
+    await byEmail.release();
     await this.finish(req, res, { login: { accountId } });
   }
 
@@ -148,17 +186,24 @@ export class InteractionController {
       );
     }
     const { email, displayName, password } = form.data;
-    const again = (error: string) =>
-      renderPage(
-        res,
-        400,
-        <RegisterPage
-          uid={uid}
-          email={email}
-          displayName={displayName}
-          error={error}
-        />,
-      );
+    const page = (error: string) => (
+      <RegisterPage
+        uid={uid}
+        email={email}
+        displayName={displayName}
+        error={error}
+      />
+    );
+    const again = (error: string) => renderPage(res, 400, page(error));
+
+    // Before the breach check and the hash, which cost time and memory
+    const byIp = await this.limiter.attempt(
+      ipKey('register', req.ip),
+      REGISTER_PER_IP,
+    );
+    if (!byIp.allowed) {
+      return this.tooMany(res, 'register:ip', byIp.retryAfterSeconds, page);
+    }
 
     const problem = await this.passwords.check(password);
     if (problem) return again(PASSWORD_PROBLEMS[problem]);
@@ -221,6 +266,25 @@ export class InteractionController {
     const grantId = await grant.save();
     // Merged with the sign-in result submitted earlier in this interaction
     await this.finish(req, res, { consent: { grantId } }, true);
+  }
+
+  /** 429 with the form again; the log names the limit, never the email */
+  private tooMany(
+    res: Response,
+    limit: string,
+    retryAfterSeconds: number,
+    page: (error: string) => ReactElement,
+  ) {
+    this.logger.warn({ limit, retryAfterSeconds }, 'Rate limit reached');
+    const minutes = Math.ceil(retryAfterSeconds / 60);
+    res.set('Retry-After', String(retryAfterSeconds));
+    renderPage(
+      res,
+      429,
+      page(
+        `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+      ),
+    );
   }
 
   /** The interaction for this browser, or undefined after rendering an error page */

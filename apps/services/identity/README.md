@@ -60,6 +60,24 @@ When the provider needs the user, it redirects the browser to `/interaction/<uid
 - **The interaction cookie ties a `uid` to the browser** that started it, so a form
   posted from elsewhere finds no interaction (CSRF protection).
 
+### Rate limits
+
+Counted in Postgres (`rate_limit`, [rate-limiter.ts](src/rate-limit/rate-limiter.ts)), so
+every replica shares them; 15-minute windows, checked before any password is hashed:
+
+| Limit               | Max | Counts                                   |
+| ------------------- | --- | ---------------------------------------- |
+| Sign-in per email   | 10  | failures (a success gives its slot back) |
+| Sign-in per IP      | 50  | every attempt                            |
+| Registration per IP | 10  | every attempt                            |
+
+- **Slowed down, never locked out:** a blocked email works again in the next window.
+  Unknown emails are limited the same way, so the limit reveals nothing.
+- **Counting is atomic** (`INSERT … ON CONFLICT DO UPDATE … RETURNING count`): of a
+  burst of simultaneous attempts, exactly the maximum get through.
+- Emails are stored as SHA-256 in the keys. Behind the gateway (Phase 2 Step 4) the
+  client IP must come from a trusted `X-Forwarded-For`.
+
 ### Storage
 
 Codes, sessions, grants and refresh tokens live in `oidc_payload`
