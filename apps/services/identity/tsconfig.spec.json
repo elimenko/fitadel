@@ -6,7 +6,8 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    "jsx": "react-jsx"
   },
   "include": [
     "jest.config.ts",
@@ -15,7 +16,8 @@
     "src/**/*.spec.ts",
     "src/**/*.d.ts",
     "src/**/*.integration.ts",
-    "jest.integration.config.cts"
+    "jest.integration.config.cts",
+    "src/**/*.spec.tsx"
   ],
   "references": [
     {

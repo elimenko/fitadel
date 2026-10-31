@@ -8,7 +8,7 @@ service trusts. Built with NestJS and
 with the other components: [docs/architecture/authentication.md](../../../docs/architecture/authentication.md).
 
 > **Status:** Phase 2 in progress. The OpenID Provider runs at `/oidc` with a
-> development-only sign-in page; the real sign-in screens come next.
+> sign-in page; registration comes next.
 
 ## Running it
 
@@ -40,9 +40,23 @@ pnpm nx serve identity                       # http://localhost:3010
   tokens rotate on every use.
 - **Errors are generic for clients** (`invalid_grant`); the cause is logged as
   `detail`. Request parameters are never logged: they hold codes and tokens.
-- **Until the sign-in screens exist**, development uses the built-in page: the login
-  is an account id, and any password is accepted. It is disabled outside
-  `NODE_ENV=development`.
+- **Request logs never contain credentials:** `Authorization`, `Cookie` and
+  `Set-Cookie` are redacted.
+
+### Sign-in screens
+
+When the provider needs the user, it redirects the browser to `/interaction/<uid>`
+([interaction.controller.tsx](src/interaction/interaction.controller.tsx)):
+
+- **Pages are React components rendered to HTML on the server**, with no client
+  JavaScript. React escapes every value, and the Content Security Policy allows no
+  scripts and only the pages' own stylesheet (by its hash).
+- **Sign-in** checks the password with `PasswordHasher` and shows one message for an
+  unknown email and a wrong password. Outdated hashes are upgraded on success.
+- **Consent is automatic**: every client is first-party, so the grant gets what the
+  request asks for. A third-party client would need a consent page.
+- **The interaction cookie ties a `uid` to the browser** that started it, so a form
+  posted from elsewhere finds no interaction (CSRF protection).
 
 ### Storage
 

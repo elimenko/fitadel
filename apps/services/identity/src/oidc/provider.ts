@@ -32,11 +32,7 @@ const ERROR_EVENTS = [
 export interface ProviderOptions {
   env: Pick<
     Env,
-    | 'NODE_ENV'
-    | 'OIDC_ISSUER'
-    | 'OIDC_API_AUDIENCE'
-    | 'OIDC_JWKS'
-    | 'OIDC_COOKIE_KEYS'
+    'OIDC_ISSUER' | 'OIDC_API_AUDIENCE' | 'OIDC_JWKS' | 'OIDC_COOKIE_KEYS'
   >;
   prisma: PrismaClient;
   logger: LoggerService;
@@ -47,8 +43,6 @@ export function createProvider({
   prisma,
   logger,
 }: ProviderOptions): Provider {
-  const development = env.NODE_ENV === 'development';
-
   const configuration: Configuration = {
     adapter: oidcPayloadAdapterFactory(
       prisma,
@@ -122,10 +116,13 @@ export function createProvider({
       RefreshToken: 14 * 24 * 60 * 60,
     },
 
+    // Our own screens (InteractionController) instead of the built-in development ones
+    interactions: {
+      url: (_ctx, interaction) => `/interaction/${interaction.uid}`,
+    },
+
     features: {
-      // A bare-bones built-in sign-in page (type an account id), until Step 2d builds
-      // the real screens. Never outside development.
-      devInteractions: { enabled: development },
+      devInteractions: { enabled: false },
       // Access tokens are JWTs for our API, verified locally by the gateway and services
       resourceIndicators: {
         enabled: true,
