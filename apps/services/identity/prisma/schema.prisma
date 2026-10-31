@@ -105,3 +105,16 @@ model OidcPayload {
   @@index([expiresAt])
   @@map("oidc_payload")
 }
+
+/// Fixed-window counters for rate limits (src/rate-limit). Keys hold IP addresses and
+/// email hashes: personal data, so not granted to identity_reader.
+model RateLimit {
+  /// What is limited and for whom, e.g. "sign-in:ip:203.0.113.7"
+  key         String
+  windowStart DateTime @map("window_start") @db.Timestamptz
+  count       Int
+
+  @@id([key, windowStart])
+  @@index([windowStart])
+  @@map("rate_limit")
+}

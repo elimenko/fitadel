@@ -17,6 +17,7 @@ import { AccountService } from './account/account.service';
 import { PasswordHasher } from './account/password-hasher';
 import { PrismaClient } from './generated/prisma/client';
 import type { PrismaService } from './prisma/prisma.service';
+import { RateLimiter } from './rate-limit/rate-limiter';
 import {
   deleteExpiredOidcPayloads,
   oidcPayloadAdapterFactory,
@@ -124,7 +125,7 @@ describe('database', () => {
     await expect(
       queryAs(urls.reader, 'SELECT count(*) FROM account'),
     ).resolves.toBeDefined();
-    for (const secret of ['account_password', 'oidc_payload']) {
+    for (const secret of ['account_password', 'oidc_payload', 'rate_limit']) {
       await expect(
         queryAs(urls.reader, `SELECT count(*) FROM ${secret}`),
       ).rejects.toThrow(/permission denied/);
@@ -300,5 +301,54 @@ describe('registration', () => {
     expect(
       await accounts.signIn('new@fitadel.local', 'river cat lanterns'),
     ).toBeUndefined();
+  });
+});
+
+describe('rate limits', () => {
+  let db: PrismaClient;
+  let limiter: RateLimiter;
+  const limit = { max: 10, windowMs: 15 * 60 * 1000 };
+  const now = new Date('2026-10-31T12:01:00Z');
+
+  beforeAll(() => {
+    db = new PrismaClient({
+      adapter: new PrismaPg({ connectionString: urls.app }),
+    });
+    limiter = new RateLimiter(db as unknown as PrismaService);
+  });
+
+  afterAll(async () => {
+    await db.$disconnect();
+  });
+
+  it('allows exactly max of a simultaneous burst', async () => {
+    const results = await Promise.all(
+      Array.from({ length: 25 }, () => limiter.attempt('burst', limit, now)),
+    );
+
+    expect(results.filter((r) => r.allowed)).toHaveLength(10);
+    const blocked = results.find((r) => !r.allowed);
+    // 12:01 in the 12:00–12:15 window: 14 minutes left
+    expect(blocked).toEqual({ allowed: false, retryAfterSeconds: 14 * 60 });
+  });
+
+  it('counts only failures when slots are given back', async () => {
+    for (let i = 0; i < 30; i++) {
+      const attempt = await limiter.attempt('successes', limit, now);
+      expect(attempt.allowed).toBe(true);
+      if (attempt.allowed) await attempt.release();
+    }
+  });
+
+  it('starts over in the next window and deletes old windows', async () => {
+    for (let i = 0; i < 10; i++) await limiter.attempt('window', limit, now);
+    expect((await limiter.attempt('window', limit, now)).allowed).toBe(false);
+
+    const later = new Date('2026-10-31T12:15:00Z');
+    expect((await limiter.attempt('window', limit, later)).allowed).toBe(true);
+
+    const tomorrow = new Date('2026-11-01T12:10:00Z');
+    expect(await limiter.deleteOld(tomorrow)).toBeGreaterThan(0);
+    expect(await db.rateLimit.count({ where: { key: 'window' } })).toBe(1);
   });
 });
