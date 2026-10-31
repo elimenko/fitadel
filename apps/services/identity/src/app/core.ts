@@ -19,6 +19,16 @@ export const coreModules = [
     useFactory: (config: ConfigService<Env, true>) => ({
       pinoHttp: {
         level: config.get('LOG_LEVEL', { infer: true }),
+        // Credentials never reach the logs: anyone who can read them could replay a
+        // session cookie or an access token
+        redact: {
+          paths: [
+            'req.headers.authorization',
+            'req.headers.cookie',
+            'res.headers["set-cookie"]',
+          ],
+          censor: '[redacted]',
+        },
         autoLogging: {
           ignore: (request) => request.url?.startsWith('/health/') ?? false,
         },
