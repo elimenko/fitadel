@@ -14,17 +14,34 @@ import type Provider from 'oidc-provider';
 import type { InteractionResults } from 'oidc-provider';
 import { z } from 'zod';
 import { AccountService } from '../account/account.service';
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  PasswordPolicy,
+  type PasswordProblem,
+} from '../account/password-policy';
 import { OIDC_PROVIDER } from '../oidc/oidc.module';
-import { ErrorPage, SignInPage } from './pages';
+import { ErrorPage, RegisterPage, SignInPage } from './pages';
 import { renderPage } from './render';
-
-/** Upper bound for the work one request can cause: argon2 reads the whole input */
-const PASSWORD_MAX_LENGTH = 256;
 
 const signInForm = z.object({
   email: z.string().trim().min(1).max(254),
   password: z.string().min(1).max(PASSWORD_MAX_LENGTH),
 });
+
+const registerForm = z.object({
+  email: z.string().trim().max(254).pipe(z.email()),
+  displayName: z.string().trim().max(100).optional(),
+  // Length rules are PasswordPolicy's; this only bounds the input
+  password: z.string().max(PASSWORD_MAX_LENGTH * 4),
+});
+
+const PASSWORD_PROBLEMS: Record<PasswordProblem, string> = {
+  too_short: `Use at least ${PASSWORD_MIN_LENGTH} characters.`,
+  too_long: `Use at most ${PASSWORD_MAX_LENGTH} characters.`,
+  breached:
+    'This password has appeared in a data breach, so attackers try it first. Choose another one.',
+};
 
 const EXPIRED =
   'This sign-in has expired or was opened in another browser. Go back to the app and start again.';
@@ -42,6 +59,7 @@ export class InteractionController {
   constructor(
     @Inject(OIDC_PROVIDER) private readonly provider: Provider,
     private readonly accounts: AccountService,
+    private readonly passwords: PasswordPolicy,
   ) {}
 
   @Get(':uid')
@@ -96,6 +114,69 @@ export class InteractionController {
       );
     }
     await this.finish(req, res, { login: { accountId } });
+  }
+
+  @Get(':uid/register')
+  async showRegister(@Req() req: Request, @Res() res: Response) {
+    const details = await this.details(req, res);
+    if (!details) return;
+    if (details.prompt.name !== 'login') {
+      return renderPage(res, 400, <ErrorPage message={EXPIRED} />);
+    }
+    renderPage(res, 200, <RegisterPage uid={details.uid} />);
+  }
+
+  @Post(':uid/register')
+  async register(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Param('uid') uid: string,
+    @Body() body: unknown,
+  ) {
+    const details = await this.details(req, res);
+    if (!details) return;
+    if (details.prompt.name !== 'login') {
+      return renderPage(res, 400, <ErrorPage message={EXPIRED} />);
+    }
+
+    const form = registerForm.safeParse(body);
+    if (!form.success) {
+      return renderPage(
+        res,
+        400,
+        <RegisterPage uid={uid} error="Enter a valid email and a password." />,
+      );
+    }
+    const { email, displayName, password } = form.data;
+    const again = (error: string) =>
+      renderPage(
+        res,
+        400,
+        <RegisterPage
+          uid={uid}
+          email={email}
+          displayName={displayName}
+          error={error}
+        />,
+      );
+
+    const problem = await this.passwords.check(password);
+    if (problem) return again(PASSWORD_PROBLEMS[problem]);
+
+    const result = await this.accounts.register({
+      email,
+      password,
+      displayName,
+    });
+    if ('error' in result) {
+      // Reveals that the email has an account; Step 2f answers "check your email"
+      // in both cases instead
+      return again(
+        'An account with this email already exists. Sign in instead.',
+      );
+    }
+    // Registered and signed in: the user lands back in the app
+    await this.finish(req, res, { login: { accountId: result.accountId } });
   }
 
   @Get(':uid/abort')
