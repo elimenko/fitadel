@@ -6,6 +6,7 @@ import {
   readCredentials,
   writeCredentials,
 } from './credentials';
+import { ResponseBodyError } from 'openid-client';
 import { login, refresh } from './oidc';
 
 const USAGE = `Usage: fitadel-dev <command>
@@ -54,6 +55,18 @@ if (!run) {
   process.exit(2);
 }
 run().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exit(1);
+  console.error(describe(error));
+  // Not process.exit(): on Windows it aborts while fetch's sockets are still closing
+  process.exitCode = 1;
 });
+
+/** OAuth errors carry the useful part (invalid_grant, ...) outside the message */
+function describe(error: unknown): string {
+  if (error instanceof ResponseBodyError) {
+    const description = error.error_description
+      ? `: ${error.error_description}`
+      : '';
+    return `${error.error} (HTTP ${error.status})${description}`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
