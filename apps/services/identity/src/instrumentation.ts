@@ -16,7 +16,6 @@ import { PgInstrumentation } from '@opentelemetry/instrumentation-pg';
 import { PinoInstrumentation } from '@opentelemetry/instrumentation-pino';
 import { UndiciInstrumentation } from '@opentelemetry/instrumentation-undici';
 import { NodeSDK } from '@opentelemetry/sdk-node';
-import { SECRET_QUERY_PARAMS } from './app/secret-query-params';
 
 // The SDK's own exports to the collector (OTLP over HTTP)
 const collector = new URL(
@@ -29,8 +28,6 @@ export const telemetry = new NodeSDK({
       // Health probes run every few seconds and would bury real traffic
       ignoreIncomingRequestHook: (request) =>
         request.url?.startsWith('/health/') ?? false,
-      // Incoming spans record the query as url.query; link tokens show as REDACTED
-      redactedQueryParamsServer: SECRET_QUERY_PARAMS,
       // Don't measure telemetry exports: their spans are suppressed, metrics are not
       ignoreOutgoingRequestHook: (request) =>
         request.hostname === collector.hostname &&

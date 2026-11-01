@@ -10,12 +10,15 @@ form { display: grid; gap: 8px; }
 input, button { font: inherit; padding: 10px; border-radius: 6px; }
 input { border: 1px solid GrayText; }
 button { margin-top: 8px; border: 0; background: #2f6f4f; color: white; cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: default; }
 .hint { margin: 0; font-size: 0.875rem; color: GrayText; }
 .error { padding: 10px; border-radius: 6px; background: #fde8e8; color: #8a1c1c; }
 `;
 
 /**
- * The Content Security Policy allows exactly this stylesheet by its hash and no
- * scripts at all, so injected markup can't run code on the page that takes passwords.
+ * The Content Security Policy allows exactly this stylesheet by its hash, and no
+ * scripts at all on the pages that take passwords, so injected markup can't run code
+ * there. The only script is the email confirmation's (scripts.ts), allowed by its hash
+ * on that page alone.
  */
 export const STYLES_HASH = `'sha256-${createHash('sha256').update(STYLES).digest('base64')}'`;

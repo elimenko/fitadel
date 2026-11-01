@@ -1,7 +1,6 @@
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
 import { type Env, validateEnv } from '../config/env';
-import { SECRET_QUERY_PARAMS, redactUrl } from './secret-query-params';
 
 /**
  * Modules every entry point needs (the HTTP service and the import command): validated
@@ -29,23 +28,6 @@ export const coreModules = [
             'res.headers["set-cookie"]',
           ],
           censor: '[redacted]',
-        },
-        // Link tokens in the query string, in both places the request log shows it.
-        // pino-http hands this a copy of the request's fields, never the request
-        // itself; query is replaced, not edited, as it's the live request's object.
-        serializers: {
-          req: (req: { url?: string; query?: Record<string, unknown> }) => {
-            if (req.url) req.url = redactUrl(req.url);
-            if (req.query) {
-              req.query = Object.fromEntries(
-                Object.entries(req.query).map(([name, value]) => [
-                  name,
-                  SECRET_QUERY_PARAMS.includes(name) ? '[redacted]' : value,
-                ]),
-              );
-            }
-            return req;
-          },
         },
         autoLogging: {
           ignore: (request) => request.url?.startsWith('/health/') ?? false,

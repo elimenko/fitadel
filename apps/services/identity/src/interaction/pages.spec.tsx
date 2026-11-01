@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { CheckEmailPage, ConfirmEmailPage, SignInPage } from './pages';
+import { CONFIRM_EMAIL_SCRIPT, CONFIRM_EMAIL_SCRIPT_HASH } from './scripts';
 import { STYLES, STYLES_HASH } from './styles';
 
 describe('SignInPage', () => {
@@ -46,9 +47,23 @@ describe('registration pages', () => {
   });
 
   it('confirms with a POST, so opening the link uses nothing up', () => {
-    const html = renderToStaticMarkup(<ConfirmEmailPage token="t0k3n" />);
+    const html = renderToStaticMarkup(<ConfirmEmailPage />);
 
     expect(html).toContain('action="/verify-email" method="post"');
-    expect(html).toContain('type="hidden" name="token" value="t0k3n"');
+    // Filled in the browser from the link's fragment; the server never had it
+    expect(html).toContain('<input type="hidden" id="token" name="token"/>');
+    expect(html).toMatch(/<button[^>]*disabled/);
+  });
+
+  it('includes exactly the script its Content Security Policy allows', () => {
+    const html = renderToStaticMarkup(<ConfirmEmailPage />);
+    const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+
+    expect(script).toBe(CONFIRM_EMAIL_SCRIPT);
+    expect(CONFIRM_EMAIL_SCRIPT_HASH).toBe(
+      `'sha256-${createHash('sha256')
+        .update(script ?? '')
+        .digest('base64')}'`,
+    );
   });
 });

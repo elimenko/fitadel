@@ -11,11 +11,13 @@ export class PublicUrl {
     this.base = new URL('../', issuer.endsWith('/') ? issuer : `${issuer}/`);
   }
 
-  link(path: string, query: Record<string, string> = {}): string {
+  /**
+   * Values go in the fragment (`#name=value`), not the query: browsers never send it,
+   * so a secret in it reaches no server, proxy or log on the way.
+   */
+  link(path: string, fragment: Record<string, string> = {}): string {
     const url = new URL(path, this.base);
-    for (const [name, value] of Object.entries(query)) {
-      url.searchParams.set(name, value);
-    }
+    url.hash = new URLSearchParams(fragment).toString();
     return url.href;
   }
 }
