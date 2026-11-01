@@ -1,9 +1,12 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Public } from '../auth/viewer';
 import { HealthCheck, HealthCheckService } from '@nestjs/terminus';
 import { DatabaseHealthIndicator } from './database.health';
 
 @ApiTags('health')
+// Probes from Kubernetes and load balancers carry no token
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(

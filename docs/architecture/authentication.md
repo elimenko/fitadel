@@ -6,8 +6,7 @@ External identity providers such as Google sit behind it, so their tokens never 
 Fitadel's APIs.
 
 > **Status:** Phase 2 in progress. Each part below names the step that implements it.
-> Until Phase 2 Step 3, the catalog identifies users by development headers
-> (`AUTH_MODE=dev-headers`).
+> The catalog accepts `identity`'s access tokens since Step 3.
 
 ## Components
 
@@ -48,6 +47,12 @@ map the claims:
 | `roles` | `roles`        | e.g. `contributor`, allowed to create public foods |
 
 Role changes take effect when the access token is next refreshed.
+
+Services do this with [`@fitadel/shared-auth`](../../libs/shared/auth): a guard on every
+route that requires a token unless the route is marked `@Public()`. A token that is sent
+is verified even on a public route, so a broken token is never mistaken for
+"anonymous". Expired tokens get `error_description="The access token expired"`, so
+clients know to refresh; unreachable keys answer `503`, not `401`.
 
 ## Sign-in flow (`fitadel-dev`)
 
