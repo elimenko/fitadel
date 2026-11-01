@@ -7,7 +7,8 @@ access tokens for calling Fitadel's API, like `gh auth login` or `gcloud auth lo
 pnpm nx serve identity                     # the OpenID Provider, on :3010
 pnpm nx run fitadel-dev:login              # opens the browser to sign in
 pnpm nx run fitadel-dev:whoami             # the access token's claims
-curl -H "Authorization: Bearer $(pnpm -s nx run fitadel-dev:token --output-style=static)" …
+# The token alone on stdout: run the built tool directly (Nx adds its own output)
+curl -H "Authorization: Bearer $(node tools/fitadel-dev/dist/main.js token)" …
 pnpm nx run fitadel-dev:logout             # deletes the stored tokens
 ```
 
