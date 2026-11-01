@@ -92,15 +92,6 @@ export class RegistrationService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  /** Whether a link is still usable; reading it uses nothing up */
-  async isValid(token: string, now = new Date()): Promise<boolean> {
-    const pending = await this.prisma.pendingRegistration.findUnique({
-      where: { tokenHash: tokenHash(token) },
-      select: { expiresAt: true },
-    });
-    return pending !== null && pending.expiresAt > now;
-  }
-
   /** Uses the link up and creates the account, verified */
   async confirm(token: string, now = new Date()): Promise<ConfirmResult> {
     const hash = tokenHash(token);

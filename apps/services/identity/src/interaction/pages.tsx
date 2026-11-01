@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { REGISTRATION_LINK_HOURS } from '../account/emails';
 import { PASSWORD_MIN_LENGTH } from '../account/password-policy';
+import { CONFIRM_EMAIL_SCRIPT } from './scripts';
 import { STYLES } from './styles';
 
 function Layout({ title, children }: { title: string; children: ReactNode }) {
@@ -161,17 +162,27 @@ export function CheckEmailPage({ uid, email }: { uid: string; email: string }) {
 
 /**
  * What the emailed link opens. Mail scanners open every link in an email; a page with
- * a button uses nothing up, only the button's POST does.
+ * a button uses nothing up, only the button's POST does. The token stays in the
+ * browser (the link's fragment) until then: the script puts it in the form.
  */
-export function ConfirmEmailPage({ token }: { token: string }) {
+export function ConfirmEmailPage() {
   return (
     <Layout title="Confirm your email">
       <h1>Confirm your email</h1>
       <p>One last step to create your Fitadel account.</p>
       <form method="post" action="/verify-email">
-        <input type="hidden" name="token" value={token} />
-        <button type="submit">Confirm email</button>
+        <input type="hidden" id="token" name="token" />
+        <button type="submit" id="confirm" disabled>
+          Confirm email
+        </button>
       </form>
+      <noscript>
+        <p className="error">
+          Turn on JavaScript to confirm: it reads the code from the link in your
+          browser, so it never travels in a web address.
+        </p>
+      </noscript>
+      <script dangerouslySetInnerHTML={{ __html: CONFIRM_EMAIL_SCRIPT }} />
     </Layout>
   );
 }

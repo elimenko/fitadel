@@ -1,7 +1,7 @@
 import { alreadyRegisteredEmail, verificationEmail } from './emails';
 
 describe('verificationEmail', () => {
-  const link = 'http://localhost:3010/verify-email?token=abc';
+  const link = 'http://localhost:3010/verify-email#token=abc';
 
   it('carries the link in both the text and the HTML', () => {
     const email = verificationEmail({ to: 'a@b.c', link });

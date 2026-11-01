@@ -272,7 +272,7 @@ describe('registration', () => {
       where: { recipient: email },
       orderBy: { createdAt: 'desc' },
     });
-    const token = /verify-email\?token=([\w-]+)/.exec(textBody)?.[1];
+    const token = /verify-email#token=([\w-]+)/.exec(textBody)?.[1];
     if (!token) throw new Error(`No link in the email to ${email}`);
     return token;
   }
@@ -315,7 +315,6 @@ describe('registration', () => {
     );
     expect(pending.rows[0].password_hash).toMatch(/^\$argon2id\$/);
 
-    expect(await registrations.isValid(token)).toBe(true);
     const result = await registrations.confirm(token);
 
     expect(result).toEqual({
@@ -331,7 +330,6 @@ describe('registration', () => {
       account.id,
     );
     // The link works once
-    expect(await registrations.isValid(token)).toBe(false);
     expect(await registrations.confirm(token)).toEqual({ status: 'invalid' });
   });
 
@@ -359,7 +357,6 @@ describe('registration', () => {
     );
     const token = await linkTokenFor('late@fitadel.local');
 
-    expect(await registrations.isValid(token)).toBe(false);
     expect(await registrations.confirm(token)).toEqual({ status: 'invalid' });
     expect(await registrations.deleteExpired()).toBeGreaterThan(0);
     expect(
