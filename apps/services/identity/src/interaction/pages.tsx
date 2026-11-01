@@ -198,6 +198,34 @@ export function CheckEmailPage({
   );
 }
 
+/**
+ * A correct password that has appeared in a data breach: the sign-in stops here and a
+ * reset link goes to the inbox. Honest about why, so the owner changes it elsewhere too.
+ */
+export function BreachedPasswordPage({
+  uid,
+  email,
+}: {
+  uid: string;
+  email: string;
+}) {
+  return (
+    <Layout title="Choose a new password">
+      <h1>Choose a new password</h1>
+      <p>
+        Your password is right, but it has appeared in a data breach on another
+        site, so attackers try it everywhere. To keep your account safe, we sent
+        a link to <strong>{email}</strong> to choose a new one; it expires in{' '}
+        {RESET_LINK_MINUTES} minutes.
+      </p>
+      <p>If you use this password anywhere else, change it there too.</p>
+      <p>
+        Changed it? <a href={`/interaction/${uid}`}>Sign in</a>
+      </p>
+    </Layout>
+  );
+}
+
 export function ForgotPasswordPage({
   uid,
   email,

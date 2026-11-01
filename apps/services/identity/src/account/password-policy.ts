@@ -26,16 +26,22 @@ export class PasswordPolicy {
     const length = [...password.normalize('NFKC')].length;
     if (length < PASSWORD_MIN_LENGTH) return 'too_short';
     if (length > PASSWORD_MAX_LENGTH) return 'too_long';
+    return (await this.isBreached(password)) ? 'breached' : undefined;
+  }
 
+  /**
+   * Also asked at every sign-in: a password that was fine when chosen may appear in a
+   * breach later (WP-23). Fails open: an outage of the breach API must not block
+   * registrations or sign-ins.
+   */
+  async isBreached(password: string): Promise<boolean> {
     try {
-      if (await this.pwned?.isBreached(password.normalize('NFKC'))) {
-        return 'breached';
-      }
+      return (
+        (await this.pwned?.isBreached(password.normalize('NFKC'))) ?? false
+      );
     } catch (error) {
-      // Fail open: an outage of the breach API must not block registrations. The
-      // length rule still applies.
       this.logger.warn({ err: error }, 'Breached-password check unavailable');
+      return false;
     }
-    return undefined;
   }
 }

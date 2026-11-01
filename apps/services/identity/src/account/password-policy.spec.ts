@@ -45,4 +45,16 @@ describe('PasswordPolicy', () => {
       await new PasswordPolicy(undefined).check('password123'),
     ).toBeUndefined();
   });
+
+  it('answers the sign-in check without the length rules, failing open', async () => {
+    isBreached.mockResolvedValue(true);
+    // An old 6-character password can still be in use; only the breach matters here
+    expect(await policy.isBreached('abc123')).toBe(true);
+
+    isBreached.mockRejectedValue(new Error('timeout'));
+    expect(await policy.isBreached('abc123')).toBe(false);
+    expect(await new PasswordPolicy(undefined).isBreached('abc123')).toBe(
+      false,
+    );
+  });
 });

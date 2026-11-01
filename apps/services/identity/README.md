@@ -182,6 +182,11 @@ Hashed with **argon2id**, OWASP's baseline parameters: 19 MiB of memory, 2 passe
   data breach. The breach check uses Have I Been Pwned's range API: only the first 5
   characters of the password's SHA-1 leave the service (k-anonymity). It fails open:
   when the API is unreachable, the password is allowed and a warning logged.
+- **Checked again at every sign-in.** A password can appear in a breach after it was
+  chosen. A correct but breached password doesn't sign in: the page says why, and a
+  reset link goes to the inbox (choosing a new password on the spot would let whoever
+  has the leaked one take the account). Fails open like registration; bounded by the
+  reset email limit.
 - **Stored as PHC strings** (`$argon2id$v=19$m=19456,t=2,p=1$<salt>$<hash>`). Every hash
   carries its own random salt and parameters. A `CHECK` rejects anything else, so a
   plain-text password can't be stored by mistake.
