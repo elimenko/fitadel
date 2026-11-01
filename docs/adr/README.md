@@ -27,3 +27,4 @@ Write it before significant work depends on the decision, not after the fact.
 | [0006](0006-postgresql-catalog-search.md)        | Use PostgreSQL trigram and full-text search for the food catalog | Accepted |
 | [0007](0007-prisma-database-access.md)           | Use Prisma for database access and migrations                    | Accepted |
 | [0008](0008-oidc-provider.md)                    | Use oidc-provider for the OpenID Provider                        | Accepted |
+| [0009](0009-envoy-api-gateway.md)                | Use Envoy as the API gateway                                     | Accepted |
