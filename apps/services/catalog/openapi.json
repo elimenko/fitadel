@@ -390,24 +390,6 @@
         "operationId": "FoodController_search_v1",
         "parameters": [
           {
-            "name": "X-Dev-Roles",
-            "in": "header",
-            "description": "Development only: \"contributor\" may add public foods",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "X-Dev-User-Id",
-            "in": "header",
-            "description": "Development only (AUTH_MODE=dev-headers), until Phase 2 brings logins: the user, as a UUID",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "name": "Accept-Language",
             "in": "header",
             "description": "Chooses the display name, e.g. \"ru-RU,ru;q=0.9,en;q=0.8\"",
@@ -470,31 +452,28 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "An invalid or expired access token (send none to read anonymously)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": ["foods"]
       },
       "post": {
         "operationId": "FoodController_create_v1",
         "parameters": [
-          {
-            "name": "X-Dev-Roles",
-            "in": "header",
-            "description": "Development only: \"contributor\" may add public foods",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "X-Dev-User-Id",
-            "in": "header",
-            "description": "Development only (AUTH_MODE=dev-headers), until Phase 2 brings logins: the user, as a UUID",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "name": "Accept-Language",
             "in": "header",
@@ -537,7 +516,7 @@
             }
           },
           "401": {
-            "description": "No user (until Phase 2: send X-Dev-User-Id)",
+            "description": "No access token, or an invalid or expired one",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -577,6 +556,11 @@
             }
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": ["foods"]
       }
     },
@@ -584,24 +568,6 @@
       "get": {
         "operationId": "FoodController_findByBarcode_v1",
         "parameters": [
-          {
-            "name": "X-Dev-Roles",
-            "in": "header",
-            "description": "Development only: \"contributor\" may add public foods",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "X-Dev-User-Id",
-            "in": "header",
-            "description": "Development only (AUTH_MODE=dev-headers), until Phase 2 brings logins: the user, as a UUID",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "name": "Accept-Language",
             "in": "header",
@@ -643,6 +609,16 @@
               }
             }
           },
+          "401": {
+            "description": "An invalid or expired access token (send none to read anonymously)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Neither the catalog nor Open Food Facts has a usable food with this barcode",
             "content": {
@@ -654,6 +630,11 @@
             }
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": ["foods"]
       }
     },
@@ -661,24 +642,6 @@
       "get": {
         "operationId": "FoodController_findById_v1",
         "parameters": [
-          {
-            "name": "X-Dev-Roles",
-            "in": "header",
-            "description": "Development only: \"contributor\" may add public foods",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "X-Dev-User-Id",
-            "in": "header",
-            "description": "Development only (AUTH_MODE=dev-headers), until Phase 2 brings logins: the user, as a UUID",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "name": "Accept-Language",
             "in": "header",
@@ -710,6 +673,16 @@
               }
             }
           },
+          "401": {
+            "description": "An invalid or expired access token (send none to read anonymously)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No such food, or it's someone else's private food",
             "content": {
@@ -721,29 +694,16 @@
             }
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": ["foods"]
       },
       "put": {
         "operationId": "FoodController_replace_v1",
         "parameters": [
-          {
-            "name": "X-Dev-Roles",
-            "in": "header",
-            "description": "Development only: \"contributor\" may add public foods",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "X-Dev-User-Id",
-            "in": "header",
-            "description": "Development only (AUTH_MODE=dev-headers), until Phase 2 brings logins: the user, as a UUID",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "name": "Accept-Language",
             "in": "header",
@@ -796,7 +756,7 @@
             }
           },
           "401": {
-            "description": "No user",
+            "description": "No access token, or an invalid or expired one",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -836,29 +796,16 @@
             }
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": ["foods"]
       },
       "delete": {
         "operationId": "FoodController_retire_v1",
         "parameters": [
-          {
-            "name": "X-Dev-Roles",
-            "in": "header",
-            "description": "Development only: \"contributor\" may add public foods",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "X-Dev-User-Id",
-            "in": "header",
-            "description": "Development only (AUTH_MODE=dev-headers), until Phase 2 brings logins: the user, as a UUID",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "name": "Accept-Language",
             "in": "header",
@@ -884,7 +831,7 @@
             "description": "Retired: no longer offered, still readable by id"
           },
           "401": {
-            "description": "No user",
+            "description": "No access token, or an invalid or expired one",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -914,6 +861,11 @@
             }
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": ["foods"]
       }
     }
@@ -927,6 +879,13 @@
   "tags": [],
   "servers": [],
   "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
     "schemas": {
       "ProblemDetailsDto": {
         "type": "object",

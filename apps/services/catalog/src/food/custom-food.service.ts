@@ -174,9 +174,7 @@ export class CustomFoodService {
 
 function requireViewer(viewer: Viewer | null): Viewer {
   if (!viewer) {
-    throw new UnauthorizedException(
-      'Sign in to add or change foods (until Phase 2: send X-Dev-User-Id)',
-    );
+    throw new UnauthorizedException('Sign in to add or change foods');
   }
   return viewer;
 }

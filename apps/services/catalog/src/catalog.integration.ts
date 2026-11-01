@@ -17,6 +17,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
+import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { Client, Pool } from 'pg';
 import type { BarcodeLookupDto, Food, SearchResultDto } from './food/food.dto';
 import type { ProblemDetails } from './http/problem-details.filter';
@@ -310,6 +311,40 @@ const fakeOff = {
     fakeOff.requests.filter((r) => r.code === code).length,
 };
 
+/**
+ * Plays the identity service's key endpoint: the catalog fetches the public half of a
+ * key made here, and tests sign access tokens with the private half, as identity does.
+ */
+const ISSUER = 'http://identity.test/oidc';
+const AUDIENCE = 'https://api.fitadel.local';
+const fakeIdentity = {
+  keys: undefined as Awaited<ReturnType<typeof generateKeyPair>> | undefined,
+  server: createHttpServer(async (_request, response) => {
+    const jwk = await exportJWK(fakeIdentity.keys!.publicKey);
+    response
+      .writeHead(200, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify({ keys: [{ ...jwk, kid: 'test', alg: 'ES256' }] }));
+  }),
+  /** An access token like identity's; options break one thing at a time */
+  token: async (
+    user: string,
+    options: {
+      roles?: string[];
+      key?: Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
+      audience?: string;
+      expiresAt?: number;
+    } = {},
+  ) =>
+    new SignJWT({ roles: options.roles ?? [] })
+      .setProtectedHeader({ alg: 'ES256', kid: 'test', typ: 'at+jwt' })
+      .setIssuer(ISSUER)
+      .setAudience(options.audience ?? AUDIENCE)
+      .setSubject(user)
+      .setIssuedAt()
+      .setExpirationTime(options.expiresAt ?? '10m')
+      .sign(options.key ?? fakeIdentity.keys!.privateKey),
+};
+
 describe('service', () => {
   let app: INestApplication;
 
@@ -318,11 +353,19 @@ describe('service', () => {
       fakeOff.server.listen(0, '127.0.0.1', resolve),
     );
     const { port } = fakeOff.server.address() as { port: number };
+    fakeIdentity.keys = await generateKeyPair('ES256');
+    await new Promise<void>((resolve) =>
+      fakeIdentity.server.listen(0, '127.0.0.1', resolve),
+    );
+    const identityPort = (fakeIdentity.server.address() as { port: number })
+      .port;
     // Config is validated when AppModule is loaded, so set the env first
     process.env.DATABASE_URL = urls.app;
     process.env.OFF_API_URL = `http://127.0.0.1:${port}`;
     process.env.OFF_TIMEOUT_MS = '300';
-    process.env.AUTH_MODE = 'dev-headers';
+    process.env.AUTH_ISSUER = ISSUER;
+    process.env.AUTH_AUDIENCE = AUDIENCE;
+    process.env.AUTH_JWKS_URI = `http://127.0.0.1:${identityPort}/jwks`;
     const { AppModule } = await import('./app/app.module.js');
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -336,6 +379,7 @@ describe('service', () => {
   afterAll(async () => {
     await app?.close();
     await new Promise((resolve) => fakeOff.server.close(resolve));
+    await new Promise((resolve) => fakeIdentity.server.close(resolve));
   });
 
   it('is ready with a real database', async () => {
@@ -516,19 +560,20 @@ describe('service', () => {
     const BOB = '0192f8a4-6a3e-7c00-8f00-00000000b0b0';
     const ALICE = '0192f8a4-6a3e-7c00-8f00-0000000a11ce';
     const CAROL = '0192f8a4-6a3e-7c00-8f00-00000000ca01';
-    const as = (user: string, contributor = false) => ({
-      'X-Dev-User-Id': user,
-      ...(contributor ? { 'X-Dev-Roles': 'contributor' } : {}),
+    const as = async (user: string, contributor = false) => ({
+      Authorization: `Bearer ${await fakeIdentity.token(user, {
+        roles: contributor ? ['contributor'] : [],
+      })}`,
     });
     const call = async (
       method: string,
       path: string,
-      headers: Record<string, string> = {},
+      headers: Record<string, string> | Promise<Record<string, string>> = {},
       body?: object,
     ) => {
       const response = await fetch(`${await app.getUrl()}${path}`, {
         method,
-        headers: { 'Content-Type': 'application/json', ...headers },
+        headers: { 'Content-Type': 'application/json', ...(await headers) },
         body: body ? JSON.stringify(body) : undefined,
       });
       const text = await response.text();
@@ -555,6 +600,64 @@ describe('service', () => {
     it('requires a user to add a food', async () => {
       const { response } = await call('POST', '/v1/foods', {}, serek());
       expect(response.status).toBe(401);
+      expect(response.headers.get('www-authenticate')).toBe('Bearer');
+    });
+
+    it('lets anyone search, without a token', async () => {
+      const { response } = await call('GET', '/v1/foods?q=serek');
+      expect(response.status).toBe(200);
+    });
+
+    it('refuses a token signed by a key that is not identity’s (WP-22)', async () => {
+      const { privateKey } = await generateKeyPair('ES256');
+      const forged = await fakeIdentity.token(BOB, {
+        roles: ['contributor'],
+        key: privateKey,
+      });
+
+      // Refused even where no token is needed: a broken token is never "anonymous"
+      for (const [method, path] of [
+        ['POST', '/v1/foods'],
+        ['GET', '/v1/foods?q=serek'],
+      ]) {
+        const { response, body } = await call(
+          method,
+          path,
+          { Authorization: `Bearer ${forged}` },
+          method === 'POST' ? serek() : undefined,
+        );
+        expect(response.status).toBe(401);
+        expect(response.headers.get('www-authenticate')).toBe(
+          'Bearer error="invalid_token", error_description="Invalid access token"',
+        );
+        expect(body.detail).toBe('Invalid access token');
+      }
+    });
+
+    it('refuses a real token issued for another API', async () => {
+      const forOtherApi = await fakeIdentity.token(BOB, {
+        audience: 'https://api.other.example',
+      });
+      const { response } = await call(
+        'POST',
+        '/v1/foods',
+        { Authorization: `Bearer ${forOtherApi}` },
+        serek(),
+      );
+      expect(response.status).toBe(401);
+    });
+
+    it('says when a token expired, so the client refreshes', async () => {
+      const expired = await fakeIdentity.token(BOB, {
+        expiresAt: Math.floor(Date.now() / 1000) - 60,
+      });
+      const { response } = await call('GET', '/v1/foods?q=serek', {
+        Authorization: `Bearer ${expired}`,
+      });
+      expect(response.status).toBe(401);
+      expect(response.headers.get('www-authenticate')).toContain(
+        'The access token expired',
+      );
     });
 
     it('lets only contributors add public foods', async () => {
@@ -828,8 +931,6 @@ onPosix('shutdown', () => {
         env: {
           ...process.env,
           NODE_ENV: 'production',
-          // Other tests set dev-headers in this process; production refuses it
-          AUTH_MODE: 'none',
           PORT: String(port),
           DATABASE_URL: urls.app,
           // Telemetry on, with no collector listening (port 9 refuses): shutdown must

@@ -74,11 +74,18 @@ The rules:
 - Invisible foods answer `404`, not `403`, so the API doesn't reveal that someone's
   private food exists.
 
-**Users until Phase 2.** There are no logins yet. With `AUTH_MODE=dev-headers`, requests
-say who they're from with `X-Dev-User-Id: <uuid>` (and `X-Dev-Roles: contributor`).
-Anyone can send these, so the service refuses to start with this mode in production.
-Endpoints only see a `Viewer { id, roles }`; Phase 2 replaces how it's established, not
-the endpoints.
+**Users** are identity's accounts. Requests carry an access token,
+`Authorization: Bearer <token>`, verified here with identity's published keys
+([@fitadel/shared-auth](../../../libs/shared/auth),
+[authentication.md](../../../docs/architecture/authentication.md)). Reading (search,
+barcode, a food by id) works without one; adding, changing and retiring foods need one.
+Endpoints only see a `Viewer { id, roles }`.
+
+```sh
+# A token from tools/fitadel-dev (sign in once with `pnpm nx run fitadel-dev:login`)
+TOKEN=$(node tools/fitadel-dev/dist/main.js token)
+curl -X POST localhost:3000/v1/foods -H "Authorization: Bearer $TOKEN"   -H 'Content-Type: application/json'   -d '{"names":{"en":"My oats"},"per100":{"kcal":380,"protein":13,"fat":7,"carbs":60}}'
+```
 
 ## Search
 

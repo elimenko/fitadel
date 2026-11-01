@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiExtraModels,
+  ApiBearerAuth,
   ApiHeader,
   ApiNoContentResponse,
   ApiResponse,
@@ -23,7 +24,7 @@ import {
 } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ZodResponse } from 'nestjs-zod';
-import { CurrentViewer, type Viewer } from '../auth/viewer';
+import { CurrentViewer, Public, type Viewer } from '../auth/viewer';
 import { toGtin14 } from './barcode';
 import { CustomFoodService } from './custom-food.service';
 import { preferredLanguages } from './display-name';
@@ -39,6 +40,10 @@ import {
   SearchResultDto,
 } from './food.dto';
 import { FoodService } from './food.service';
+
+const NO_TOKEN = 'No access token, or an invalid or expired one';
+const INVALID_TOKEN =
+  'An invalid or expired access token (send none to read anonymously)';
 
 /** An error response in the docs: RFC 9457 problem details */
 const problem = (status: number, description: string) =>
@@ -59,17 +64,8 @@ const problem = (status: number, description: string) =>
   required: false,
   description: 'Chooses the display name, e.g. "ru-RU,ru;q=0.9,en;q=0.8"',
 })
-@ApiHeader({
-  name: 'X-Dev-User-Id',
-  required: false,
-  description:
-    'Development only (AUTH_MODE=dev-headers), until Phase 2 brings logins: the user, as a UUID',
-})
-@ApiHeader({
-  name: 'X-Dev-Roles',
-  required: false,
-  description: 'Development only: "contributor" may add public foods',
-})
+// An access token from identity; reading works without one (anonymously)
+@ApiBearerAuth()
 @Controller({ path: 'foods', version: '1' })
 export class FoodController {
   constructor(
@@ -78,12 +74,14 @@ export class FoodController {
   ) {}
 
   @Get()
+  @Public()
   @ZodResponse({
     status: 200,
     type: SearchResultDto,
     description: "A page of matching foods (with the user's own private ones)",
   })
   @problem(400, 'Invalid query parameters')
+  @problem(401, INVALID_TOKEN)
   async search(
     @Query() { q, limit, offset }: SearchQueryDto,
     @Headers('accept-language') acceptLanguage: string | undefined,
@@ -101,12 +99,14 @@ export class FoodController {
   }
 
   @Get('barcode/:code')
+  @Public()
   @ZodResponse({
     status: 200,
     type: BarcodeLookupDto,
     description: 'The best match, plus alternatives',
   })
   @problem(400, 'Not a valid barcode (wrong length, or a mistyped digit)')
+  @problem(401, INVALID_TOKEN)
   @problem(
     404,
     'Neither the catalog nor Open Food Facts has a usable food with this barcode',
@@ -137,11 +137,13 @@ export class FoodController {
   }
 
   @Get(':id')
+  @Public()
   @ZodResponse({
     status: 200,
     type: FoodDto,
     description: 'The food, also when retired (diary entries refer to it)',
   })
+  @problem(401, INVALID_TOKEN)
   @problem(404, "No such food, or it's someone else's private food")
   async findById(
     @Param() { id }: FoodIdParamsDto,
@@ -166,7 +168,7 @@ export class FoodController {
     description: 'Created; the Location header points to it',
   })
   @problem(400, 'Invalid fields, or a mistyped barcode')
-  @problem(401, 'No user (until Phase 2: send X-Dev-User-Id)')
+  @problem(401, NO_TOKEN)
   @problem(403, 'Public foods need the contributor role')
   @problem(404, 'basedOnId: no such food to copy')
   @problem(
@@ -191,7 +193,7 @@ export class FoodController {
   @Put(':id')
   @ZodResponse({ status: 200, type: FoodDto, description: 'Replaced' })
   @problem(400, 'Invalid fields, or a mistyped barcode')
-  @problem(401, 'No user')
+  @problem(401, NO_TOKEN)
   @problem(
     403,
     'Not your food (create your own copy instead), or public needs the contributor role',
@@ -217,7 +219,7 @@ export class FoodController {
   @ApiNoContentResponse({
     description: 'Retired: no longer offered, still readable by id',
   })
-  @problem(401, 'No user')
+  @problem(401, NO_TOKEN)
   @problem(403, 'Not your food')
   @problem(404, "No such food, or it's someone else's private food")
   async retire(

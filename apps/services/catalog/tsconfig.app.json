@@ -29,6 +29,9 @@
   "references": [
     {
       "path": "../../../libs/shared/nutrition/tsconfig.lib.json"
+    },
+    {
+      "path": "../../../libs/shared/auth/tsconfig.lib.json"
     }
   ]
 }

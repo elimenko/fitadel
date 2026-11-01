@@ -13,25 +13,21 @@ describe('validateEnv', () => {
       OFF_API_URL: 'https://world.openfoodfacts.org',
       OFF_USER_AGENT: 'Fitadel/0.1 (+https://github.com/elimenko/fitadel)',
       OFF_TIMEOUT_MS: 2000,
-      AUTH_MODE: 'none',
+      AUTH_ISSUER: 'http://localhost:3010/oidc',
+      AUTH_AUDIENCE: 'https://api.fitadel.local',
     });
   });
 
-  it('refuses development headers in production', () => {
-    expect(() =>
-      validateEnv({
-        NODE_ENV: 'production',
-        AUTH_MODE: 'dev-headers',
-        DATABASE_URL,
-      }),
-    ).toThrow(/AUTH_MODE/);
+  it('takes a separate address for the signing keys', () => {
     expect(
       validateEnv({
-        NODE_ENV: 'development',
-        AUTH_MODE: 'dev-headers',
         DATABASE_URL,
-      }),
-    ).toMatchObject({ AUTH_MODE: 'dev-headers' });
+        AUTH_JWKS_URI: 'http://identity.fitadel.svc:3010/oidc/jwks',
+      }).AUTH_JWKS_URI,
+    ).toBe('http://identity.fitadel.svc:3010/oidc/jwks');
+    expect(() =>
+      validateEnv({ DATABASE_URL, AUTH_ISSUER: 'not a url' }),
+    ).toThrow(/AUTH_ISSUER/);
   });
 
   it('parses strings into typed values', () => {
