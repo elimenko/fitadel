@@ -8,7 +8,8 @@ service trusts. Built with NestJS and
 with the other components: [docs/architecture/authentication.md](../../../docs/architecture/authentication.md).
 
 > **Status:** Phase 2 in progress. The OpenID Provider runs at `/oidc` with a
-> sign-in and registration pages; email verification comes next.
+> sign-in and registration pages, and emails go out through an outbox; email
+> verification comes next.
 
 ## Running it
 
@@ -135,6 +136,28 @@ Hashed with **argon2id**, OWASP's baseline parameters: 19 MiB of memory, 2 passe
   don't reveal which emails have accounts.
 - **Hashing runs on libuv's thread pool:** it doesn't block the event loop, and at most
   4 hashes (76 MiB) run at once. Sign-in endpoints need rate limits all the same.
+
+## Email
+
+Emails go through an outbox ([email-outbox.ts](src/email/email-outbox.ts)) rather than
+straight to the mail server:
+
+- **Queued in the same transaction** as what they're about (`enqueueEmail(tx, …)`): a
+  verification token and its email are saved together or not at all. The request
+  doesn't wait for the mail server, so it takes the same time whether an email was
+  queued or not, and it works while the mail server is down.
+- **Sent by a background loop** every 2 seconds, in every replica. A claim takes a
+  10-minute lease in one statement with `FOR UPDATE SKIP LOCKED`, so replicas skip each
+  other's rows instead of sending them twice.
+- **Retried** after 30 s, 1, 2, 4 and 8 minutes, then dropped with an error in the log.
+  A 5xx answer (e.g. no such mailbox) drops it at once.
+- **At least once:** a crash between sending and deleting the row sends it again.
+- **Deleted once sent or dropped.** Rows hold verification and reset links until then,
+  so `identity_reader` can't read the table. Logs carry the row id, never the address.
+
+Locally, [Mailpit](https://mailpit.axllent.org) (`docker compose up -d`) catches every
+email: open http://localhost:8025. In production `SMTP_URL` points at Amazon SES
+(`smtps://…`), and TLS is required.
 
 ## Database access
 

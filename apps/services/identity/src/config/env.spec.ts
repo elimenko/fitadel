@@ -27,6 +27,8 @@ describe('validateEnv', () => {
       HIBP_API_URL: 'https://api.pwnedpasswords.com',
       HIBP_TIMEOUT_MS: 2000,
       OUTBOUND_USER_AGENT: 'Fitadel/0.1 (+https://github.com/elimenko/fitadel)',
+      SMTP_URL: 'smtp://localhost:1025',
+      MAIL_FROM: 'Fitadel <no-reply@fitadel.local>',
       OIDC_ISSUER: 'http://localhost:3010/oidc',
       OIDC_API_AUDIENCE: 'https://api.fitadel.local',
       OIDC_JWKS: { keys: [{ ...key, alg: 'ES256', use: 'sig' }] },
@@ -41,6 +43,16 @@ describe('validateEnv', () => {
     expect(() =>
       validateEnv({ ...valid, DATABASE_URL: 'http://localhost/identity' }),
     ).toThrow(/DATABASE_URL/);
+  });
+
+  it('requires an SMTP SMTP_URL', () => {
+    expect(() =>
+      validateEnv({ ...valid, SMTP_URL: 'http://localhost:1025' }),
+    ).toThrow(/SMTP_URL/);
+    expect(
+      validateEnv({ ...valid, SMTP_URL: 'smtps://user:pass@mail:465' })
+        .SMTP_URL,
+    ).toBe('smtps://user:pass@mail:465');
   });
 
   it('requires signing and cookie keys', () => {
