@@ -5,6 +5,7 @@ import { PublicUrl } from '../config/public-url';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AccountService } from './account.service';
 import { PasswordHasher } from './password-hasher';
+import { PasswordResetService } from './password-reset.service';
 import { PasswordPolicy } from './password-policy';
 import { PwnedPasswords } from './pwned-passwords';
 import { RegistrationService } from './registration.service';
@@ -14,6 +15,7 @@ import { RegistrationService } from './registration.service';
   providers: [
     AccountService,
     RegistrationService,
+    PasswordResetService,
     PasswordHasher,
     {
       provide: PublicUrl,
@@ -36,6 +38,11 @@ import { RegistrationService } from './registration.service';
         ),
     },
   ],
-  exports: [AccountService, RegistrationService, PasswordPolicy],
+  exports: [
+    AccountService,
+    RegistrationService,
+    PasswordResetService,
+    PasswordPolicy,
+  ],
 })
 export class AccountModule {}

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { REGISTRATION_LINK_HOURS } from '../account/emails';
+import { REGISTRATION_LINK_HOURS, RESET_LINK_MINUTES } from '../account/emails';
 import { PASSWORD_MIN_LENGTH } from '../account/password-policy';
-import { CONFIRM_EMAIL_SCRIPT } from './scripts';
+import { LINK_TOKEN_SCRIPT } from './scripts';
 import { STYLES } from './styles';
 
 function Layout({ title, children }: { title: string; children: ReactNode }) {
@@ -60,6 +60,9 @@ export function SignInPage({ uid, email, error }: SignInPageProps) {
         <button type="submit">Sign in</button>
       </form>
       <p>
+        <a href={`/interaction/${uid}/forgot`}>Forgot your password?</a>
+      </p>
+      <p>
         New to Fitadel?{' '}
         <a href={`/interaction/${uid}/register`}>Create an account</a>
       </p>
@@ -110,22 +113,7 @@ export function RegisterPage({
           autoComplete="name"
           defaultValue={displayName}
         />
-        <label htmlFor="password">Password</label>
-        {/* No maxLength: it would silently cut a pasted password; the server checks */}
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="new-password"
-          minLength={PASSWORD_MIN_LENGTH}
-          aria-describedby="password-hint"
-          required
-          autoFocus={Boolean(email)}
-        />
-        <p id="password-hint" className="hint">
-          At least {PASSWORD_MIN_LENGTH} characters. A few unrelated words are
-          easy to remember and hard to guess.
-        </p>
+        <NewPasswordInput label="Password" autoFocus={Boolean(email)} />
         <button type="submit">Create account</button>
       </form>
       <p>
@@ -135,28 +123,139 @@ export function RegisterPage({
   );
 }
 
+function NewPasswordInput({
+  label,
+  autoFocus,
+}: {
+  label: string;
+  autoFocus: boolean;
+}) {
+  return (
+    <>
+      <label htmlFor="password">{label}</label>
+      {/* No maxLength: it would silently cut a pasted password; the server checks */}
+      <input
+        id="password"
+        name="password"
+        type="password"
+        autoComplete="new-password"
+        minLength={PASSWORD_MIN_LENGTH}
+        aria-describedby="password-hint"
+        required
+        autoFocus={autoFocus}
+      />
+      <p id="password-hint" className="hint">
+        At least {PASSWORD_MIN_LENGTH} characters. A few unrelated words are
+        easy to remember and hard to guess.
+      </p>
+    </>
+  );
+}
+
+const CHECK_EMAIL = {
+  register: {
+    action: 'finish creating your account',
+    expires: `${REGISTRATION_LINK_HOURS} hours`,
+    done: 'Confirmed your email?',
+  },
+  reset: {
+    action: 'choose a new password',
+    expires: `${RESET_LINK_MINUTES} minutes`,
+    done: 'Changed your password?',
+  },
+};
+
 /**
- * After the registration form, whether the address is new or already has an account:
- * the same page either way, so it reveals nothing. It stays in the sign-in flow, so
- * signing in after confirming continues to the app.
+ * After the registration or "forgot password" form, whether the address has an
+ * account or not: the same page either way, so it reveals nothing. It stays in the
+ * sign-in flow, so signing in afterwards continues to the app.
  */
-export function CheckEmailPage({ uid, email }: { uid: string; email: string }) {
+export function CheckEmailPage({
+  uid,
+  email,
+  purpose,
+}: {
+  uid: string;
+  email: string;
+  purpose: keyof typeof CHECK_EMAIL;
+}) {
+  const text = CHECK_EMAIL[purpose];
   return (
     <Layout title="Check your email">
       <h1>Check your email</h1>
       <p>
-        We sent an email to <strong>{email}</strong>. Open the link in it to
-        finish creating your account; it expires in {REGISTRATION_LINK_HOURS}{' '}
-        hours.
+        We sent an email to <strong>{email}</strong>. Open the link in it to{' '}
+        {text.action}; it expires in {text.expires}.
       </p>
       <p className="hint">
         Nothing arrived after a few minutes? Check your spam folder, or go back
         and check the address.
       </p>
       <p>
-        Confirmed your email? <a href={`/interaction/${uid}`}>Sign in</a>
+        {text.done} <a href={`/interaction/${uid}`}>Sign in</a>
       </p>
     </Layout>
+  );
+}
+
+export function ForgotPasswordPage({
+  uid,
+  email,
+  error,
+}: {
+  uid: string;
+  email?: string;
+  error?: string;
+}) {
+  return (
+    <Layout title="Reset your password">
+      <h1>Reset your password</h1>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      <p>We'll email you a link to choose a new password.</p>
+      <form method="post" action={`/interaction/${uid}/forgot`}>
+        <label htmlFor="email">Email</label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="username"
+          defaultValue={email}
+          required
+          autoFocus
+        />
+        <button type="submit">Send link</button>
+      </form>
+      <p>
+        Remembered it? <a href={`/interaction/${uid}`}>Sign in</a>
+      </p>
+    </Layout>
+  );
+}
+
+/**
+ * The token reaches the form from the link's fragment (see LINK_TOKEN_SCRIPT), or from
+ * the server when the form comes back with an error: then it's in this page's body,
+ * never in a URL.
+ */
+function LinkTokenField({ token }: { token?: string }) {
+  return <input type="hidden" id="token" name="token" defaultValue={token} />;
+}
+
+function LinkTokenScript() {
+  return (
+    <>
+      <noscript>
+        <p className="error">
+          Turn on JavaScript to continue: it reads the code from the link in
+          your browser, so it never travels in a web address.
+        </p>
+      </noscript>
+      <script dangerouslySetInnerHTML={{ __html: LINK_TOKEN_SCRIPT }} />
+    </>
   );
 }
 
@@ -171,18 +270,46 @@ export function ConfirmEmailPage() {
       <h1>Confirm your email</h1>
       <p>One last step to create your Fitadel account.</p>
       <form method="post" action="/verify-email">
-        <input type="hidden" id="token" name="token" />
-        <button type="submit" id="confirm" disabled>
+        <LinkTokenField />
+        <button type="submit" id="submit" disabled>
           Confirm email
         </button>
       </form>
-      <noscript>
-        <p className="error">
-          Turn on JavaScript to confirm: it reads the code from the link in your
-          browser, so it never travels in a web address.
+      <LinkTokenScript />
+    </Layout>
+  );
+}
+
+/**
+ * What the reset link opens. Choosing the password is the deliberate step a scanner
+ * won't take, so no separate confirm button is needed.
+ */
+export function ResetPasswordPage({
+  token,
+  error,
+}: {
+  token?: string;
+  error?: string;
+}) {
+  return (
+    <Layout title="Choose a new password">
+      <h1>Choose a new password</h1>
+      {error && (
+        <p className="error" role="alert">
+          {error}
         </p>
-      </noscript>
-      <script dangerouslySetInnerHTML={{ __html: CONFIRM_EMAIL_SCRIPT }} />
+      )}
+      <form method="post" action="/reset-password">
+        <LinkTokenField token={token} />
+        <NewPasswordInput label="New password" autoFocus />
+        <button type="submit" id="submit" disabled={!token}>
+          Change password
+        </button>
+      </form>
+      <p className="hint">
+        Every device signed in to your account is signed out.
+      </p>
+      <LinkTokenScript />
     </Layout>
   );
 }
