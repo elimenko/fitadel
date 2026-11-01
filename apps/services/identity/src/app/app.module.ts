@@ -1,10 +1,17 @@
 import { Module } from '@nestjs/common';
+import { EmailModule } from '../email/email.module';
 import { HealthModule } from '../health/health.module';
 import { InteractionModule } from '../interaction/interaction.module';
 import { OidcModule } from '../oidc/oidc.module';
 import { coreModules } from './core';
 
 @Module({
-  imports: [...coreModules, HealthModule, OidcModule, InteractionModule],
+  imports: [
+    ...coreModules,
+    HealthModule,
+    OidcModule,
+    InteractionModule,
+    EmailModule,
+  ],
 })
 export class AppModule {}

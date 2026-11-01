@@ -36,9 +36,10 @@ pnpm nx graph   # explore the project graph
 
 ### Local infrastructure
 
-Backing services run in Docker: PostgreSQL, and an observability stack
+Backing services run in Docker: PostgreSQL, an observability stack
 ([grafana/otel-lgtm](https://github.com/grafana/docker-otel-lgtm)) that receives
-OpenTelemetry data. Prerequisite: Docker with Compose v2.
+OpenTelemetry data, and [Mailpit](https://mailpit.axllent.org), which catches every
+email the services send. Prerequisite: Docker with Compose v2.
 
 ```sh
 cp .env.example .env    # then adjust the values
@@ -47,7 +48,7 @@ docker compose down     # stop; add -v to also delete the data volumes
 ```
 
 Grafana runs at http://localhost:3001, with traces (Tempo), metrics (Prometheus)
-and logs (Loki) from the services.
+and logs (Loki) from the services. Mailpit's inbox is at http://localhost:8025.
 
 A fresh data volume provisions each service's database and roles on first start
 ([tools/db](tools/db)). For an existing volume, run a service's script once, e.g.

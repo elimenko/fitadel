@@ -50,6 +50,12 @@ export const envSchema = z.object({
     .min(1)
     .default('Fitadel/0.1 (+https://github.com/elimenko/fitadel)'),
   /**
+   * The mail server: Mailpit locally (compose.yaml), Amazon SES in production, with
+   * credentials in the URL (smtps://user:password@host:465). Production requires TLS.
+   */
+  SMTP_URL: z.url({ protocol: /^smtps?$/ }).default('smtp://localhost:1025'),
+  MAIL_FROM: z.string().min(1).default('Fitadel <no-reply@fitadel.local>'),
+  /**
    * The provider's public URL, mount path included: the `iss` claim every verifier
    * checks, so it must match exactly what clients see (the gateway's URL behind one)
    */

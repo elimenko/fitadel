@@ -47,6 +47,19 @@ services:
       - lgtm-data:/data
       - ./tools/observability/grafana-datasources.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/grafana-datasources.yaml:ro
 
+  # Development-only mail server: catches every email the services send (nothing is
+  # delivered) and shows it in a web inbox. The services send over plain SMTP to :1025.
+  mailpit:
+    image: axllent/mailpit:v1.31.6@sha256:23fe39e81bde596a918000b3135c0f85dc8bb4c9ea6be274b051143f3e300387
+    ports:
+      - '127.0.0.1:1025:1025' # SMTP
+      - '127.0.0.1:8025:8025' # Web inbox and API
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
 volumes:
   postgres-data:
   lgtm-data:

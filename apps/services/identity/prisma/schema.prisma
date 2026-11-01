@@ -108,6 +108,27 @@ model OidcPayload {
 
 /// Fixed-window counters for rate limits (src/rate-limit). Keys hold IP addresses and
 /// email hashes: personal data, so not granted to identity_reader.
+/// Emails waiting to be sent (transactional outbox): written in the same transaction as
+/// whatever the email is about, sent by a background loop, deleted once sent or given
+/// up on. Until then the bodies hold secrets (verification and reset links), so
+/// identity_reader gets no grant.
+model EmailOutbox {
+  id            String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  recipient     String
+  subject       String
+  textBody      String   @map("text_body")
+  htmlBody      String?  @map("html_body")
+  attempts      Int      @default(0)
+  /// When a sender may pick the row up: now for new rows, later after a failure or
+  /// while a sender holds it
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at") @db.Timestamptz
+  lastError     String?  @map("last_error")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([nextAttemptAt])
+  @@map("email_outbox")
+}
+
 model RateLimit {
   /// What is limited and for whom, e.g. "sign-in:ip:203.0.113.7"
   key         String
