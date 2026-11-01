@@ -7,8 +7,8 @@ service trusts. Built with NestJS and
 ([ADR-0007](../../../docs/adr/0007-prisma-database-access.md)) on PostgreSQL. How it fits
 with the other components: [docs/architecture/authentication.md](../../../docs/architecture/authentication.md).
 
-> **Status:** Phase 2 in progress. The OpenID Provider runs at `/oidc` with sign-in
-> and registration pages; registration is confirmed by email. Password reset comes next.
+> **Status:** Phase 2 in progress. The OpenID Provider runs at `/oidc` with sign-in,
+> registration confirmed by email, and password reset.
 
 ## Running it
 
@@ -65,7 +65,7 @@ When the provider needs the user, it redirects the browser to `/interaction/<uid
 ### Rate limits
 
 Counted in Postgres (`rate_limit`, [rate-limiter.ts](src/rate-limit/rate-limiter.ts)), so
-every replica shares them; 15-minute windows (registration emails: 1 hour), checked
+every replica shares them; 15-minute windows (emails: 1 hour), checked
 before any password is hashed:
 
 | Limit               | Max | Counts                                   |
@@ -74,6 +74,8 @@ before any password is hashed:
 | Sign-in per IP      | 50  | every attempt                            |
 | Registration per IP | 10  | every attempt                            |
 | Registration emails | 3   | per address and hour; over it, no email  |
+| Reset requests      | 10  | per IP, every attempt                    |
+| Reset emails        | 3   | per address and hour; over it, no email  |
 
 - **Slowed down, never locked out:** a blocked email works again in the next window.
   Unknown emails are limited the same way, so the limit reveals nothing.
@@ -147,6 +149,28 @@ starts it, the emailed link finishes it.
 - **Confirming twice, or two links for one email at once,** creates one account: the
   pending rows of an email are locked in a fixed order first (without it, two
   confirmations deadlocked).
+
+### Password reset
+
+"Forgot your password?" on the sign-in page
+([password-reset.service.ts](src/account/password-reset.service.ts)):
+
+- **The request page always says "check your email".** An address with an account
+  gets a reset link, one without gets "there's no account for this address": one
+  transaction and one email either way, so the page and its timing reveal nothing.
+- **The link works once, for 30 minutes**: a leaked reset token takes over the
+  account, unlike a verification token. Same token handling as registration (stored as
+  SHA-256, in the fragment, one hashed script on the page).
+- **The new password passes the same rules** (length, breach check). After a rejected
+  one the token comes back in the page body, so the user can try again.
+- **A reset signs the account out everywhere:** its sessions, grants, refresh tokens
+  and codes are deleted (every `oidc_payload` row with its `accountId`). Access tokens
+  already issued work until they expire, within 10 minutes. People reset when they
+  think someone got in; this gets them out.
+- **The owner is told** by a "your password was changed" email, and the email counts
+  as verified.
+- **Two links of one account used at once** take turns: each locks the account row
+  first.
 
 ## Passwords
 

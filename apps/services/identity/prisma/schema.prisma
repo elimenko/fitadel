@@ -31,6 +31,7 @@ model Account {
 
   password     AccountPassword?
   identities   AccountIdentity[]
+  resets       PasswordReset[]
   roles        AccountRole[]     @relation("roles")
   rolesGranted AccountRole[]     @relation("grantedBy")
 
@@ -124,6 +125,21 @@ model PendingRegistration {
   @@index([email])
   @@index([expiresAt])
   @@map("pending_registration")
+}
+
+/// Password reset links waiting to be used. A token here can take over the account,
+/// so it lives 30 minutes and only its hash is stored: identity_reader gets no grant.
+model PasswordReset {
+  /// SHA-256 of the token in the link; the token itself is never stored
+  tokenHash Bytes    @id @map("token_hash")
+  accountId String   @map("account_id") @db.Uuid
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([accountId])
+  @@index([expiresAt])
+  @@map("password_reset")
 }
 
 /// Emails waiting to be sent (transactional outbox): written in the same transaction as

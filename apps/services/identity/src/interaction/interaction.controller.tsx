@@ -15,24 +15,32 @@ import type { InteractionResults } from 'oidc-provider';
 import type { ReactElement } from 'react';
 import { z } from 'zod';
 import { AccountService } from '../account/account.service';
+import { PasswordResetService } from '../account/password-reset.service';
 import {
   PASSWORD_MAX_LENGTH,
-  PASSWORD_MIN_LENGTH,
   PasswordPolicy,
-  type PasswordProblem,
 } from '../account/password-policy';
 import { RegistrationService } from '../account/registration.service';
 import { OIDC_PROVIDER } from '../oidc/oidc.module';
 import {
   REGISTER_PER_EMAIL,
   REGISTER_PER_IP,
+  RESET_PER_EMAIL,
+  RESET_PER_IP,
   SIGN_IN_PER_EMAIL,
   SIGN_IN_PER_IP,
   emailKey,
   ipKey,
 } from '../rate-limit/limits';
 import { RateLimiter } from '../rate-limit/rate-limiter';
-import { CheckEmailPage, ErrorPage, RegisterPage, SignInPage } from './pages';
+import { PASSWORD_PROBLEMS } from './messages';
+import {
+  CheckEmailPage,
+  ErrorPage,
+  ForgotPasswordPage,
+  RegisterPage,
+  SignInPage,
+} from './pages';
 import { renderPage } from './render';
 
 const signInForm = z.object({
@@ -47,12 +55,9 @@ const registerForm = z.object({
   password: z.string().max(PASSWORD_MAX_LENGTH * 4),
 });
 
-const PASSWORD_PROBLEMS: Record<PasswordProblem, string> = {
-  too_short: `Use at least ${PASSWORD_MIN_LENGTH} characters.`,
-  too_long: `Use at most ${PASSWORD_MAX_LENGTH} characters.`,
-  breached:
-    'This password has appeared in a data breach, so attackers try it first. Choose another one.',
-};
+const forgotForm = z.object({
+  email: z.string().trim().max(254).pipe(z.email()),
+});
 
 const EXPIRED =
   'This sign-in has expired or was opened in another browser. Go back to the app and start again.';
@@ -71,6 +76,7 @@ export class InteractionController {
     @Inject(OIDC_PROVIDER) private readonly provider: Provider,
     private readonly accounts: AccountService,
     private readonly registrations: RegistrationService,
+    private readonly resets: PasswordResetService,
     private readonly passwords: PasswordPolicy,
     private readonly limiter: RateLimiter,
   ) {}
@@ -229,7 +235,74 @@ export class InteractionController {
       );
     }
     // New address or taken, the same page: the email tells the owner which it was
-    renderPage(res, 200, <CheckEmailPage uid={uid} email={email} />);
+    renderPage(
+      res,
+      200,
+      <CheckEmailPage uid={uid} email={email} purpose="register" />,
+    );
+  }
+
+  @Get(':uid/forgot')
+  async showForgot(@Req() req: Request, @Res() res: Response) {
+    const details = await this.details(req, res);
+    if (!details) return;
+    if (details.prompt.name !== 'login') {
+      return renderPage(res, 400, <ErrorPage message={EXPIRED} />);
+    }
+    renderPage(res, 200, <ForgotPasswordPage uid={details.uid} />);
+  }
+
+  @Post(':uid/forgot')
+  async forgot(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Param('uid') uid: string,
+    @Body() body: unknown,
+  ) {
+    const details = await this.details(req, res);
+    if (!details) return;
+    if (details.prompt.name !== 'login') {
+      return renderPage(res, 400, <ErrorPage message={EXPIRED} />);
+    }
+
+    const form = forgotForm.safeParse(body);
+    if (!form.success) {
+      return renderPage(
+        res,
+        400,
+        <ForgotPasswordPage uid={uid} error="Enter a valid email." />,
+      );
+    }
+    const { email } = form.data;
+    const page = (error: string) => (
+      <ForgotPasswordPage uid={uid} email={email} error={error} />
+    );
+
+    const byIp = await this.limiter.attempt(
+      ipKey('reset', req.ip),
+      RESET_PER_IP,
+    );
+    if (!byIp.allowed) {
+      return this.tooMany(res, 'reset:ip', byIp.retryAfterSeconds, page);
+    }
+    // Same as registration: over the limit, the same page and no email
+    const byEmail = await this.limiter.attempt(
+      emailKey('reset', email),
+      RESET_PER_EMAIL,
+    );
+    if (byEmail.allowed) {
+      await this.resets.request(email);
+    } else {
+      this.logger.warn(
+        { limit: 'reset:email', retryAfterSeconds: byEmail.retryAfterSeconds },
+        'Rate limit reached, no email sent',
+      );
+    }
+    renderPage(
+      res,
+      200,
+      <CheckEmailPage uid={uid} email={email} purpose="reset" />,
+    );
   }
 
   @Get(':uid/abort')

@@ -3,6 +3,7 @@ import { normalizeEmail } from '../account/email';
 import type { Limit } from './rate-limiter';
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
+const ONE_HOUR = 60 * 60 * 1000;
 
 /** Failed sign-ins per email. Slows guessing down without locking anyone out for good. */
 export const SIGN_IN_PER_EMAIL: Limit = { max: 10, windowMs: FIFTEEN_MINUTES };
@@ -10,7 +11,10 @@ export const SIGN_IN_PER_EMAIL: Limit = { max: 10, windowMs: FIFTEEN_MINUTES };
 export const SIGN_IN_PER_IP: Limit = { max: 50, windowMs: FIFTEEN_MINUTES };
 export const REGISTER_PER_IP: Limit = { max: 10, windowMs: FIFTEEN_MINUTES };
 /** Emails our form sends to one address, so nobody can flood someone's inbox with it */
-export const REGISTER_PER_EMAIL: Limit = { max: 3, windowMs: 60 * 60 * 1000 };
+export const REGISTER_PER_EMAIL: Limit = { max: 3, windowMs: ONE_HOUR };
+export const RESET_PER_IP: Limit = { max: 10, windowMs: FIFTEEN_MINUTES };
+/** Reset emails to one address, for the same reason */
+export const RESET_PER_EMAIL: Limit = { max: 3, windowMs: ONE_HOUR };
 
 /** The email as a hash: rate limit rows outlive the attempt, the address needn't */
 export function emailKey(prefix: string, email: string): string {

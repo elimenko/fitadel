@@ -76,3 +76,83 @@ export function alreadyRegisteredEmail(input: { to: string }): EmailMessage {
     ),
   };
 }
+
+export const RESET_LINK_MINUTES = 30;
+
+export function passwordResetEmail(input: {
+  to: string;
+  link: string;
+}): EmailMessage {
+  const expires = `The link works once and expires in ${RESET_LINK_MINUTES} minutes.`;
+  const ignore =
+    "If you didn't ask for this, ignore this email: your password stays as it is.";
+  return {
+    to: input.to,
+    subject: 'Reset your Fitadel password',
+    text: [
+      'Hi,',
+      'Open this link to choose a new password for your Fitadel account:',
+      input.link,
+      expires,
+      ignore,
+    ].join('\n\n'),
+    html: html(
+      <>
+        <p>Hi,</p>
+        <p>Choose a new password for your Fitadel account:</p>
+        <p>
+          <a href={input.link}>Reset password</a>
+        </p>
+        <p>{expires}</p>
+        <p>{ignore}</p>
+      </>,
+    ),
+  };
+}
+
+/**
+ * Sent instead of a reset link when the address has no account, so the "forgot
+ * password" page looks the same and does the same work either way.
+ */
+export function noAccountEmail(input: { to: string }): EmailMessage {
+  const lines = [
+    'Someone, hopefully you, asked to reset the Fitadel password for this email address, but there is no Fitadel account for it.',
+    'If it was you, you may have registered with another address, or you can create an account from the app.',
+    "If it wasn't you, you can ignore this email.",
+  ];
+  return {
+    to: input.to,
+    subject: 'No Fitadel account for this address',
+    text: ['Hi,', ...lines].join('\n\n'),
+    html: html(
+      <>
+        <p>Hi,</p>
+        {lines.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
+      </>,
+    ),
+  };
+}
+
+/** After a reset: if it wasn't the owner, this is how they find out */
+export function passwordChangedEmail(input: { to: string }): EmailMessage {
+  const lines = [
+    'The password for your Fitadel account was just changed, and every device was signed out.',
+    "If it was you, there's nothing to do.",
+    "If it wasn't you, someone can read your email: secure your email account first, then reset your Fitadel password from the sign-in page.",
+  ];
+  return {
+    to: input.to,
+    subject: 'Your Fitadel password was changed',
+    text: ['Hi,', ...lines].join('\n\n'),
+    html: html(
+      <>
+        <p>Hi,</p>
+        {lines.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
+      </>,
+    ),
+  };
+}

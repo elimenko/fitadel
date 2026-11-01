@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { RegistrationService } from '../account/registration.service';
 import { ConfirmEmailPage, NoticePage } from './pages';
 import { renderPage } from './render';
-import { CONFIRM_EMAIL_SCRIPT_HASH } from './scripts';
+import { LINK_TOKEN_SCRIPT_HASH } from './scripts';
 
 /** 32 random bytes in base64url; anything else can't be one of our tokens */
 const confirmForm = z.object({ token: z.string().regex(/^[\w-]{43}$/) });
@@ -21,7 +21,7 @@ export class VerifyEmailController {
   @Get()
   show(@Res() res: Response) {
     renderPage(res, 200, <ConfirmEmailPage />, {
-      scriptHash: CONFIRM_EMAIL_SCRIPT_HASH,
+      scriptHash: LINK_TOKEN_SCRIPT_HASH,
     });
   }
 

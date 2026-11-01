@@ -1,7 +1,12 @@
 import { createHash } from 'node:crypto';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { CheckEmailPage, ConfirmEmailPage, SignInPage } from './pages';
-import { CONFIRM_EMAIL_SCRIPT, CONFIRM_EMAIL_SCRIPT_HASH } from './scripts';
+import {
+  CheckEmailPage,
+  ConfirmEmailPage,
+  ResetPasswordPage,
+  SignInPage,
+} from './pages';
+import { LINK_TOKEN_SCRIPT, LINK_TOKEN_SCRIPT_HASH } from './scripts';
 import { STYLES, STYLES_HASH } from './styles';
 
 describe('SignInPage', () => {
@@ -39,7 +44,7 @@ describe('SignInPage', () => {
 describe('registration pages', () => {
   it('keeps "check your email" inside the sign-in flow', () => {
     const html = renderToStaticMarkup(
-      <CheckEmailPage uid="abc123" email="a@b.c" />,
+      <CheckEmailPage uid="abc123" email="a@b.c" purpose="register" />,
     );
 
     expect(html).toContain('href="/interaction/abc123"');
@@ -59,11 +64,41 @@ describe('registration pages', () => {
     const html = renderToStaticMarkup(<ConfirmEmailPage />);
     const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
 
-    expect(script).toBe(CONFIRM_EMAIL_SCRIPT);
-    expect(CONFIRM_EMAIL_SCRIPT_HASH).toBe(
+    expect(script).toBe(LINK_TOKEN_SCRIPT);
+    expect(LINK_TOKEN_SCRIPT_HASH).toBe(
       `'sha256-${createHash('sha256')
         .update(script ?? '')
         .digest('base64')}'`,
     );
+  });
+});
+
+describe('password reset pages', () => {
+  it('offers a reset from the sign-in page, inside the flow', () => {
+    const html = renderToStaticMarkup(<SignInPage uid="abc123" />);
+
+    expect(html).toContain('href="/interaction/abc123/forgot"');
+  });
+
+  it('waits for the script before the token is there', () => {
+    const html = renderToStaticMarkup(<ResetPasswordPage />);
+
+    expect(html).toContain('action="/reset-password" method="post"');
+    expect(html).toContain('<input type="hidden" id="token" name="token"/>');
+    expect(html).toMatch(/<button[^>]*disabled/);
+    expect(html).toContain('autoComplete="new-password"');
+    expect(/<script>([\s\S]*?)<\/script>/.exec(html)?.[1]).toBe(
+      LINK_TOKEN_SCRIPT,
+    );
+  });
+
+  it('keeps the token in the page body after a rejected password', () => {
+    const html = renderToStaticMarkup(
+      <ResetPasswordPage token="t0k3n" error="Use at least 8 characters." />,
+    );
+
+    expect(html).toContain('name="token" value="t0k3n"');
+    expect(html).not.toMatch(/<button[^>]*disabled/);
+    expect(html).toContain('role="alert"');
   });
 });

@@ -4,7 +4,6 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { createHash, randomBytes } from 'node:crypto';
 import { PublicUrl } from '../config/public-url';
 import { enqueueEmail } from '../email/email-outbox';
 import { PrismaService } from '../prisma/prisma.service';
@@ -14,6 +13,7 @@ import {
   alreadyRegisteredEmail,
   verificationEmail,
 } from './emails';
+import { linkTokenHash, newLinkToken } from './link-token';
 import { PasswordHasher } from './password-hasher';
 
 export type ConfirmResult =
@@ -23,10 +23,6 @@ export type ConfirmResult =
 
 const LINK_TTL_MS = REGISTRATION_LINK_HOURS * 60 * 60 * 1000;
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
-
-/** Links carry the token; the database only its hash, so a leaked table opens nothing */
-const tokenHash = (token: string) =>
-  new Uint8Array(createHash('sha256').update(token).digest());
 
 /**
  * Registration in two steps: the form starts it, the emailed link finishes it. The
@@ -70,10 +66,10 @@ export class RegistrationService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      const token = randomBytes(32).toString('base64url');
+      const { token, hash } = newLinkToken();
       await tx.pendingRegistration.create({
         data: {
-          tokenHash: tokenHash(token),
+          tokenHash: hash,
           email,
           displayName: input.displayName || null,
           passwordHash,
@@ -94,7 +90,7 @@ export class RegistrationService implements OnModuleInit, OnModuleDestroy {
 
   /** Uses the link up and creates the account, verified */
   async confirm(token: string, now = new Date()): Promise<ConfirmResult> {
-    const hash = tokenHash(token);
+    const hash = linkTokenHash(token);
     return this.prisma.$transaction(async (tx) => {
       const pending = await tx.pendingRegistration.findUnique({
         where: { tokenHash: hash },

@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { Client } from 'pg';
 import { AccountService } from './account/account.service';
 import { PasswordHasher } from './account/password-hasher';
+import { PasswordResetService } from './account/password-reset.service';
 import { RegistrationService } from './account/registration.service';
 import { PublicUrl } from './config/public-url';
 import { EmailOutboxSender, enqueueEmail } from './email/email-outbox';
@@ -135,6 +136,7 @@ describe('database', () => {
       'rate_limit',
       'email_outbox',
       'pending_registration',
+      'password_reset',
     ]) {
       await expect(
         queryAs(urls.reader, `SELECT count(*) FROM ${secret}`),
@@ -406,6 +408,200 @@ describe('registration', () => {
         where: { email: 'twin@fitadel.local' },
       }),
     ).toBe(0);
+  });
+});
+
+describe('password reset', () => {
+  let db: PrismaClient;
+  let accounts: AccountService;
+  let resets: PasswordResetService;
+  const hasher = new PasswordHasher();
+  const oldPassword = 'old river cat';
+  const newPassword = 'new lantern moss';
+
+  async function createAccount(email: string, verified = true) {
+    return db.account.create({
+      data: {
+        email,
+        emailVerifiedAt: verified ? new Date() : null,
+        password: { create: { hash: await hasher.hash(oldPassword) } },
+      },
+    });
+  }
+
+  async function resetTokenFor(email: string): Promise<string> {
+    const { textBody } = await db.emailOutbox.findFirstOrThrow({
+      where: { recipient: email, subject: 'Reset your Fitadel password' },
+      orderBy: { createdAt: 'desc' },
+    });
+    const token = /reset-password#token=([\w-]+)/.exec(textBody)?.[1];
+    if (!token) throw new Error(`No link in the email to ${email}`);
+    return token;
+  }
+
+  beforeAll(() => {
+    db = new PrismaClient({
+      adapter: new PrismaPg({ connectionString: urls.app }),
+    });
+    const prismaService = db as unknown as PrismaService;
+    accounts = new AccountService(prismaService, hasher);
+    resets = new PasswordResetService(
+      prismaService,
+      hasher,
+      new PublicUrl('http://localhost:3010/oidc'),
+    );
+  });
+
+  afterAll(async () => {
+    await db.$disconnect();
+  });
+
+  it('replaces the password, verifies the email and signs out everywhere', async () => {
+    const account = await createAccount('reset@fitadel.local', false);
+    const other = await createAccount('bystander@fitadel.local');
+    const adapter = (model: string) =>
+      oidcPayloadAdapterFactory(db, () => new Error('consumed'))(model);
+    const id = () => randomBytes(32).toString('base64url');
+    // What a signed-in browser and an app holding a refresh token leave behind
+    await adapter('Session').upsert(
+      id(),
+      { uid: id(), accountId: account.id },
+      60,
+    );
+    await adapter('Grant').upsert(id(), { accountId: account.id }, 60);
+    await adapter('RefreshToken').upsert(
+      id(),
+      { accountId: account.id, grantId: 'g-reset' },
+      60,
+    );
+    await adapter('Session').upsert(
+      id(),
+      { uid: id(), accountId: other.id },
+      60,
+    );
+
+    await resets.request(' Reset@Fitadel.LOCAL');
+    const token = await resetTokenFor('reset@fitadel.local');
+    expect(await resets.isValid(token)).toBe(true);
+    // Only the hash is stored
+    const stored = await db.passwordReset.findFirstOrThrow({
+      where: { accountId: account.id },
+    });
+    expect(Buffer.from(stored.tokenHash)).toEqual(
+      createHash('sha256').update(token).digest(),
+    );
+
+    expect(await resets.reset(token, newPassword)).toEqual({
+      status: 'changed',
+      accountId: account.id,
+    });
+
+    expect(
+      await accounts.signIn('reset@fitadel.local', oldPassword),
+    ).toBeUndefined();
+    expect(await accounts.signIn('reset@fitadel.local', newPassword)).toBe(
+      account.id,
+    );
+    expect(
+      (await db.account.findUniqueOrThrow({ where: { id: account.id } }))
+        .emailVerifiedAt,
+    ).not.toBeNull();
+    const { rows } = await queryAs(
+      urls.app,
+      `SELECT payload->>'accountId' AS account FROM oidc_payload
+       WHERE payload->>'accountId' IN ('${account.id}', '${other.id}')`,
+    );
+    expect(rows).toEqual([{ account: other.id }]);
+    expect(
+      await db.emailOutbox.count({
+        where: {
+          recipient: 'reset@fitadel.local',
+          subject: 'Your Fitadel password was changed',
+        },
+      }),
+    ).toBe(1);
+    // The link works once
+    expect(await resets.isValid(token)).toBe(false);
+    expect(await resets.reset(token, 'third lantern moss')).toEqual({
+      status: 'invalid',
+    });
+  });
+
+  it('sends an unknown address the other email and stores no token', async () => {
+    await resets.request('nobody-here@fitadel.local');
+
+    const email = await db.emailOutbox.findFirstOrThrow({
+      where: { recipient: 'nobody-here@fitadel.local' },
+    });
+    expect(email.subject).toBe('No Fitadel account for this address');
+    expect(email.textBody).not.toContain('token=');
+  });
+
+  it('refuses a link after 30 minutes, and the cleanup deletes it', async () => {
+    await createAccount('slow@fitadel.local');
+    await resets.request(
+      'slow@fitadel.local',
+      new Date(Date.now() - 31 * 60 * 1000),
+    );
+    const token = await resetTokenFor('slow@fitadel.local');
+
+    expect(await resets.isValid(token)).toBe(false);
+    expect(await resets.reset(token, newPassword)).toEqual({
+      status: 'invalid',
+    });
+    expect(await resets.deleteExpired()).toBeGreaterThan(0);
+    expect(
+      await accounts.signIn('slow@fitadel.local', oldPassword),
+    ).toBeDefined();
+  });
+
+  it('lets one of two links of an account win when both are used at once', async () => {
+    const account = await createAccount('two-links@fitadel.local');
+    await resets.request('two-links@fitadel.local');
+    const first = await resetTokenFor('two-links@fitadel.local');
+    await resets.request('two-links@fitadel.local');
+    const second = await resetTokenFor('two-links@fitadel.local');
+
+    const results = await Promise.all([
+      resets.reset(first, newPassword),
+      resets.reset(second, 'other lantern moss'),
+    ]);
+
+    // One wins; the other finds its link deleted. (Each hashes its password first, so
+    // they rarely overlap here; the next test pins down the lock that makes it safe.)
+    expect(results.map((r) => r.status).sort()).toEqual(['changed', 'invalid']);
+    expect(
+      await db.passwordReset.count({ where: { accountId: account.id } }),
+    ).toBe(0);
+  });
+
+  it('waits for a concurrent reset of the account before touching anything', async () => {
+    const account = await createAccount('locked@fitadel.local');
+    await resets.request('locked@fitadel.local');
+    const token = await resetTokenFor('locked@fitadel.local');
+    // Another reset of this account, caught after taking the account lock
+    const other = new Client({ connectionString: urls.app });
+    await other.connect();
+    await other.query('BEGIN');
+    await other.query('SELECT 1 FROM account WHERE id = $1 FOR UPDATE', [
+      account.id,
+    ]);
+
+    const resetting = resets.reset(token, newPassword);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    // Still waiting: its link and the old password are untouched. Without the lock it
+    // would go ahead, and two resets of one account could deadlock (each holding its
+    // own link's row, then waiting for the other's)
+    expect(
+      await db.passwordReset.count({ where: { accountId: account.id } }),
+    ).toBe(1);
+    expect(await accounts.signIn('locked@fitadel.local', oldPassword)).toBe(
+      account.id,
+    );
+
+    await other.query('COMMIT');
+    await other.end();
+    expect((await resetting).status).toBe('changed');
   });
 });
 
