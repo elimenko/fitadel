@@ -15,6 +15,8 @@ import { join } from 'node:path';
 import { Client } from 'pg';
 import { AccountService } from './account/account.service';
 import { PasswordHasher } from './account/password-hasher';
+import { RegistrationService } from './account/registration.service';
+import { PublicUrl } from './config/public-url';
 import { EmailOutboxSender, enqueueEmail } from './email/email-outbox';
 import { type EmailMessage, Mailer } from './email/mailer';
 import { PrismaClient } from './generated/prisma/client';
@@ -132,6 +134,7 @@ describe('database', () => {
       'oidc_payload',
       'rate_limit',
       'email_outbox',
+      'pending_registration',
     ]) {
       await expect(
         queryAs(urls.reader, `SELECT count(*) FROM ${secret}`),
@@ -260,14 +263,31 @@ describe('oidc-provider storage', () => {
 describe('registration', () => {
   let db: PrismaClient;
   let accounts: AccountService;
+  let registrations: RegistrationService;
+  const password = 'river cat lantern';
+
+  /** The token from the newest email to this address, as the user would click it */
+  async function linkTokenFor(email: string): Promise<string> {
+    const { textBody } = await db.emailOutbox.findFirstOrThrow({
+      where: { recipient: email },
+      orderBy: { createdAt: 'desc' },
+    });
+    const token = /verify-email\?token=([\w-]+)/.exec(textBody)?.[1];
+    if (!token) throw new Error(`No link in the email to ${email}`);
+    return token;
+  }
 
   beforeAll(() => {
     db = new PrismaClient({
       adapter: new PrismaPg({ connectionString: urls.app }),
     });
-    accounts = new AccountService(
-      db as unknown as PrismaService,
-      new PasswordHasher(),
+    const prismaService = db as unknown as PrismaService;
+    const hasher = new PasswordHasher();
+    accounts = new AccountService(prismaService, hasher);
+    registrations = new RegistrationService(
+      prismaService,
+      hasher,
+      new PublicUrl('http://localhost:3010/oidc'),
     );
   });
 
@@ -275,39 +295,120 @@ describe('registration', () => {
     await db.$disconnect();
   });
 
-  it('lets exactly one of two simultaneous registrations of an email win', async () => {
-    const register = () =>
-      accounts.register({
-        email: 'Twin@Fitadel.local',
-        password: 'river cat lantern',
-      });
-
-    const results = await Promise.all([register(), register()]);
-
-    expect(results).toEqual(
-      expect.arrayContaining([
-        { accountId: expect.any(String) },
-        { error: 'email_taken' },
-      ]),
-    );
+  it('creates the account only when the link is confirmed, verified', async () => {
+    await registrations.start({
+      email: ' New@Fitadel.LOCAL',
+      password,
+      displayName: 'New User',
+    });
     expect(
-      await db.account.count({ where: { email: 'twin@fitadel.local' } }),
+      await db.account.count({ where: { email: 'new@fitadel.local' } }),
+    ).toBe(0);
+    const pending = await queryAs(
+      urls.app,
+      "SELECT token_hash, password_hash FROM pending_registration WHERE email = 'new@fitadel.local'",
+    );
+    const token = await linkTokenFor('new@fitadel.local');
+    // Only hashes are stored: the token's and the password's
+    expect(pending.rows[0].token_hash).toEqual(
+      createHash('sha256').update(token).digest(),
+    );
+    expect(pending.rows[0].password_hash).toMatch(/^\$argon2id\$/);
+
+    expect(await registrations.isValid(token)).toBe(true);
+    const result = await registrations.confirm(token);
+
+    expect(result).toEqual({
+      status: 'confirmed',
+      accountId: expect.any(String),
+    });
+    const account = await db.account.findUniqueOrThrow({
+      where: { email: 'new@fitadel.local' },
+    });
+    expect(account.emailVerifiedAt).not.toBeNull();
+    expect(account.displayName).toBe('New User');
+    expect(await accounts.signIn('NEW@fitadel.local', password)).toBe(
+      account.id,
+    );
+    // The link works once
+    expect(await registrations.isValid(token)).toBe(false);
+    expect(await registrations.confirm(token)).toEqual({ status: 'invalid' });
+  });
+
+  it('sends a taken address the other email and starts nothing', async () => {
+    await registrations.start({ email: 'new@fitadel.local', password });
+
+    const email = await db.emailOutbox.findFirstOrThrow({
+      where: { recipient: 'new@fitadel.local' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(email.subject).toBe('You already have a Fitadel account');
+    expect(email.textBody).not.toContain('token=');
+    expect(
+      await db.pendingRegistration.count({
+        where: { email: 'new@fitadel.local' },
+      }),
+    ).toBe(0);
+  });
+
+  it('refuses an expired link, and the cleanup deletes it', async () => {
+    const dayAndAHourAgo = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    await registrations.start(
+      { email: 'late@fitadel.local', password },
+      dayAndAHourAgo,
+    );
+    const token = await linkTokenFor('late@fitadel.local');
+
+    expect(await registrations.isValid(token)).toBe(false);
+    expect(await registrations.confirm(token)).toEqual({ status: 'invalid' });
+    expect(await registrations.deleteExpired()).toBeGreaterThan(0);
+    expect(
+      await db.pendingRegistration.count({
+        where: { email: 'late@fitadel.local' },
+      }),
+    ).toBe(0);
+  });
+
+  it('uses a link once when it is confirmed twice at once', async () => {
+    await registrations.start({ email: 'double@fitadel.local', password });
+    const token = await linkTokenFor('double@fitadel.local');
+
+    const results = await Promise.all([
+      registrations.confirm(token),
+      registrations.confirm(token),
+    ]);
+
+    expect(results.map((r) => r.status).sort()).toEqual([
+      'confirmed',
+      'invalid',
+    ]);
+    expect(
+      await db.account.count({ where: { email: 'double@fitadel.local' } }),
     ).toBe(1);
   });
 
-  it('signs in with the registered password', async () => {
-    const registered = await accounts.register({
-      email: 'new@fitadel.local',
-      password: 'river cat lantern',
-      displayName: 'New User',
-    });
+  it('creates one account when two links for one email are confirmed at once', async () => {
+    await registrations.start({ email: 'twin@fitadel.local', password });
+    const first = await linkTokenFor('twin@fitadel.local');
+    await registrations.start({ email: 'twin@fitadel.local', password });
+    const second = await linkTokenFor('twin@fitadel.local');
+    expect(second).not.toBe(first);
 
+    const results = await Promise.all([
+      registrations.confirm(first),
+      registrations.confirm(second),
+    ]);
+
+    // The loser finds the account taken, or its link already deleted by the winner
+    expect(results.filter((r) => r.status === 'confirmed')).toHaveLength(1);
     expect(
-      await accounts.signIn('NEW@fitadel.local', 'river cat lantern'),
-    ).toBe('accountId' in registered ? registered.accountId : '-');
+      await db.account.count({ where: { email: 'twin@fitadel.local' } }),
+    ).toBe(1);
     expect(
-      await accounts.signIn('new@fitadel.local', 'river cat lanterns'),
-    ).toBeUndefined();
+      await db.pendingRegistration.count({
+        where: { email: 'twin@fitadel.local' },
+      }),
+    ).toBe(0);
   });
 });
 

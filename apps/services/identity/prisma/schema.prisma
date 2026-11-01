@@ -108,6 +108,24 @@ model OidcPayload {
 
 /// Fixed-window counters for rate limits (src/rate-limit). Keys hold IP addresses and
 /// email hashes: personal data, so not granted to identity_reader.
+/// Registrations waiting for their email link. The account is created only when the
+/// link is confirmed, so every account's email is verified and nobody can claim an
+/// address they can't read. Holds password hashes: identity_reader gets no grant.
+model PendingRegistration {
+  /// SHA-256 of the token in the link; the token itself is never stored
+  tokenHash    Bytes    @id @map("token_hash")
+  /// Normalized like account.email; not unique: anyone may start a registration
+  email        String
+  displayName  String?  @map("display_name")
+  passwordHash String   @map("password_hash")
+  expiresAt    DateTime @map("expires_at") @db.Timestamptz
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([email])
+  @@index([expiresAt])
+  @@map("pending_registration")
+}
+
 /// Emails waiting to be sent (transactional outbox): written in the same transaction as
 /// whatever the email is about, sent by a background loop, deleted once sent or given
 /// up on. Until then the bodies hold secrets (verification and reset links), so

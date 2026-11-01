@@ -21,8 +21,10 @@ import {
   PasswordPolicy,
   type PasswordProblem,
 } from '../account/password-policy';
+import { RegistrationService } from '../account/registration.service';
 import { OIDC_PROVIDER } from '../oidc/oidc.module';
 import {
+  REGISTER_PER_EMAIL,
   REGISTER_PER_IP,
   SIGN_IN_PER_EMAIL,
   SIGN_IN_PER_IP,
@@ -30,7 +32,7 @@ import {
   ipKey,
 } from '../rate-limit/limits';
 import { RateLimiter } from '../rate-limit/rate-limiter';
-import { ErrorPage, RegisterPage, SignInPage } from './pages';
+import { CheckEmailPage, ErrorPage, RegisterPage, SignInPage } from './pages';
 import { renderPage } from './render';
 
 const signInForm = z.object({
@@ -68,6 +70,7 @@ export class InteractionController {
   constructor(
     @Inject(OIDC_PROVIDER) private readonly provider: Provider,
     private readonly accounts: AccountService,
+    private readonly registrations: RegistrationService,
     private readonly passwords: PasswordPolicy,
     private readonly limiter: RateLimiter,
   ) {}
@@ -208,20 +211,25 @@ export class InteractionController {
     const problem = await this.passwords.check(password);
     if (problem) return again(PASSWORD_PROBLEMS[problem]);
 
-    const result = await this.accounts.register({
-      email,
-      password,
-      displayName,
-    });
-    if ('error' in result) {
-      // Reveals that the email has an account; Step 2f answers "check your email"
-      // in both cases instead
-      return again(
-        'An account with this email already exists. Sign in instead.',
+    // Over the limit, nothing is sent, but the page is the same: it says nothing about
+    // the address, only the inbox does
+    const byEmail = await this.limiter.attempt(
+      emailKey('register', email),
+      REGISTER_PER_EMAIL,
+    );
+    if (byEmail.allowed) {
+      await this.registrations.start({ email, password, displayName });
+    } else {
+      this.logger.warn(
+        {
+          limit: 'register:email',
+          retryAfterSeconds: byEmail.retryAfterSeconds,
+        },
+        'Rate limit reached, no email sent',
       );
     }
-    // Registered and signed in: the user lands back in the app
-    await this.finish(req, res, { login: { accountId: result.accountId } });
+    // New address or taken, the same page: the email tells the owner which it was
+    renderPage(res, 200, <CheckEmailPage uid={uid} email={email} />);
   }
 
   @Get(':uid/abort')

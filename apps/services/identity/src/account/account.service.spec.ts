@@ -1,5 +1,4 @@
 import { hash } from '@node-rs/argon2';
-import { Prisma } from '../generated/prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 import { AccountService } from './account.service';
 import { PASSWORD_HASH_OPTIONS, PasswordHasher } from './password-hasher';
@@ -7,9 +6,8 @@ import { PASSWORD_HASH_OPTIONS, PasswordHasher } from './password-hasher';
 const hasher = new PasswordHasher();
 const findUnique = jest.fn();
 const update = jest.fn();
-const create = jest.fn();
 const prisma = {
-  account: { findUnique, create },
+  account: { findUnique },
   accountPassword: { update },
 } as unknown as PrismaService;
 const accounts = new AccountService(prisma, hasher);
@@ -17,7 +15,6 @@ const accounts = new AccountService(prisma, hasher);
 beforeEach(() => {
   findUnique.mockReset();
   update.mockReset();
-  create.mockReset();
 });
 
 describe('AccountService.signIn', () => {
@@ -81,41 +78,5 @@ describe('AccountService.signIn', () => {
 
     expect(await accounts.signIn('a@b.c', 'wrong')).toBeUndefined();
     expect(update).not.toHaveBeenCalled();
-  });
-});
-
-describe('AccountService.register', () => {
-  it('stores the email normalized and the password hashed', async () => {
-    create.mockResolvedValue({ id: 'account-1' });
-
-    expect(
-      await accounts.register({
-        email: ' New@Fitadel.LOCAL',
-        password: 'river cat lantern',
-        displayName: '',
-      }),
-    ).toEqual({ accountId: 'account-1' });
-
-    const { data } = create.mock.calls[0][0];
-    expect(data.email).toBe('new@fitadel.local');
-    expect(data.displayName).toBeNull();
-    expect(data.password.create.hash).toMatch(/^\$argon2id\$/);
-    expect(data.password.create.hash).not.toContain('river');
-  });
-
-  it('reports a taken email from the unique index', async () => {
-    create.mockRejectedValue(
-      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
-        code: 'P2002',
-        clientVersion: 'test',
-      }),
-    );
-
-    expect(
-      await accounts.register({
-        email: 'a@b.c',
-        password: 'river cat lantern',
-      }),
-    ).toEqual({ error: 'email_taken' });
   });
 });

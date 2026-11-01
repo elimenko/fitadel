@@ -9,6 +9,8 @@ export const SIGN_IN_PER_EMAIL: Limit = { max: 10, windowMs: FIFTEEN_MINUTES };
 /** Every sign-in attempt from one IP; each one costs a password hash */
 export const SIGN_IN_PER_IP: Limit = { max: 50, windowMs: FIFTEEN_MINUTES };
 export const REGISTER_PER_IP: Limit = { max: 10, windowMs: FIFTEEN_MINUTES };
+/** Emails our form sends to one address, so nobody can flood someone's inbox with it */
+export const REGISTER_PER_EMAIL: Limit = { max: 3, windowMs: 60 * 60 * 1000 };
 
 /** The email as a hash: rate limit rows outlive the attempt, the address needn't */
 export function emailKey(prefix: string, email: string): string {
