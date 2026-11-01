@@ -1,17 +1,26 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env';
+import { PublicUrl } from '../config/public-url';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AccountService } from './account.service';
 import { PasswordHasher } from './password-hasher';
 import { PasswordPolicy } from './password-policy';
 import { PwnedPasswords } from './pwned-passwords';
+import { RegistrationService } from './registration.service';
 
 @Module({
   imports: [PrismaModule],
   providers: [
     AccountService,
+    RegistrationService,
     PasswordHasher,
+    {
+      provide: PublicUrl,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Env, true>) =>
+        new PublicUrl(config.get('OIDC_ISSUER', { infer: true })),
+    },
     {
       provide: PasswordPolicy,
       inject: [ConfigService],
@@ -27,6 +36,6 @@ import { PwnedPasswords } from './pwned-passwords';
         ),
     },
   ],
-  exports: [AccountService, PasswordPolicy],
+  exports: [AccountService, RegistrationService, PasswordPolicy],
 })
 export class AccountModule {}

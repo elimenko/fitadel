@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { REGISTRATION_LINK_HOURS } from '../account/emails';
 import { PASSWORD_MIN_LENGTH } from '../account/password-policy';
 import { STYLES } from './styles';
 
@@ -129,6 +130,63 @@ export function RegisterPage({
       <p>
         Already have an account? <a href={`/interaction/${uid}`}>Sign in</a>
       </p>
+    </Layout>
+  );
+}
+
+/**
+ * After the registration form, whether the address is new or already has an account:
+ * the same page either way, so it reveals nothing. It stays in the sign-in flow, so
+ * signing in after confirming continues to the app.
+ */
+export function CheckEmailPage({ uid, email }: { uid: string; email: string }) {
+  return (
+    <Layout title="Check your email">
+      <h1>Check your email</h1>
+      <p>
+        We sent an email to <strong>{email}</strong>. Open the link in it to
+        finish creating your account; it expires in {REGISTRATION_LINK_HOURS}{' '}
+        hours.
+      </p>
+      <p className="hint">
+        Nothing arrived after a few minutes? Check your spam folder, or go back
+        and check the address.
+      </p>
+      <p>
+        Confirmed your email? <a href={`/interaction/${uid}`}>Sign in</a>
+      </p>
+    </Layout>
+  );
+}
+
+/**
+ * What the emailed link opens. Mail scanners open every link in an email; a page with
+ * a button uses nothing up, only the button's POST does.
+ */
+export function ConfirmEmailPage({ token }: { token: string }) {
+  return (
+    <Layout title="Confirm your email">
+      <h1>Confirm your email</h1>
+      <p>One last step to create your Fitadel account.</p>
+      <form method="post" action="/verify-email">
+        <input type="hidden" name="token" value={token} />
+        <button type="submit">Confirm email</button>
+      </form>
+    </Layout>
+  );
+}
+
+export function NoticePage({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <Layout title={title}>
+      <h1>{title}</h1>
+      {children}
     </Layout>
   );
 }
