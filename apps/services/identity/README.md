@@ -7,9 +7,8 @@ service trusts. Built with NestJS and
 ([ADR-0007](../../../docs/adr/0007-prisma-database-access.md)) on PostgreSQL. How it fits
 with the other components: [docs/architecture/authentication.md](../../../docs/architecture/authentication.md).
 
-> **Status:** Phase 2 in progress. The OpenID Provider runs at `/oidc` with a
-> sign-in and registration pages, and emails go out through an outbox; email
-> verification comes next.
+> **Status:** Phase 2 in progress. The OpenID Provider runs at `/oidc` with sign-in
+> and registration pages; registration is confirmed by email. Password reset comes next.
 
 ## Running it
 
@@ -51,11 +50,13 @@ When the provider needs the user, it redirects the browser to `/interaction/<uid
 
 - **Pages are React components rendered to HTML on the server**, with no client
   JavaScript. React escapes every value, and the Content Security Policy allows no
-  scripts and only the pages' own stylesheet (by its hash).
+  scripts and only the pages' own stylesheet (by its hash). The one exception is the
+  email confirmation page (see Registration), which allows its own script by hash.
 - **Sign-in** checks the password with `PasswordHasher` and shows one message for an
   unknown email and a wrong password. Outdated hashes are upgraded on success.
-- **Registration** creates the account and signs the user in. It reveals when an email
-  already has an account; Step 2f replaces that with "check your email" in both cases.
+- **Registration** shows "check your email" whether the address is new or taken, and
+  stays in the sign-in flow: after confirming, the user signs in there and continues
+  to the app (see Registration).
 - **Consent is automatic**: every client is first-party, so the grant gets what the
   request asks for. A third-party client would need a consent page.
 - **The interaction cookie ties a `uid` to the browser** that started it, so a form
@@ -64,13 +65,15 @@ When the provider needs the user, it redirects the browser to `/interaction/<uid
 ### Rate limits
 
 Counted in Postgres (`rate_limit`, [rate-limiter.ts](src/rate-limit/rate-limiter.ts)), so
-every replica shares them; 15-minute windows, checked before any password is hashed:
+every replica shares them; 15-minute windows (registration emails: 1 hour), checked
+before any password is hashed:
 
 | Limit               | Max | Counts                                   |
 | ------------------- | --- | ---------------------------------------- |
 | Sign-in per email   | 10  | failures (a success gives its slot back) |
 | Sign-in per IP      | 50  | every attempt                            |
 | Registration per IP | 10  | every attempt                            |
+| Registration emails | 3   | per address and hour; over it, no email  |
 
 - **Slowed down, never locked out:** a blocked email works again in the next window.
   Unknown emails are limited the same way, so the limit reveals nothing.
@@ -110,10 +113,40 @@ when its last token has expired (10 minutes for access and ID tokens).
 | `account_identity` | sign-ins through external providers, keyed by their issuer and subject |
 | `account_role`     | roles such as `contributor`, with who granted them and when            |
 
+Registrations waiting for their email link live in `pending_registration` (see
+Registration), not in `account`.
+
 - **The email is a login name, not a key.** It's stored trimmed and lowercased, and is
   unique. Tokens and other services refer to accounts by `id` only.
-- **External identities are keyed by `(issuer, subject)`, never by email.** An email
-  that hasn't been verified never links an external identity to an existing account.
+- **External identities are keyed by `(issuer, subject)`, never by email.** A Google
+  identity is linked to an existing account only after signing in to that account,
+  never automatically because the emails match, verified or not. A verified email
+  proves someone could read the inbox, not that they registered the account: an
+  attacker can register your address with their password and hope you click the link
+  (pre-account takeover).
+
+### Registration
+
+Two steps ([registration.service.ts](src/account/registration.service.ts)): the form
+starts it, the emailed link finishes it.
+
+- **The form** checks the password, hashes it, and in one transaction either stores a
+  `pending_registration` and queues a verification email, or, for a taken address,
+  queues an "already registered" email instead. Same page, same work, same time
+  either way, so the form reveals nothing about which addresses have accounts.
+- **The account is created only by the link**, already verified. Nobody can claim an
+  address they can't read, and unconfirmed registrations expire after 24 hours
+  (deleted hourly).
+- **The link's token** is 32 random bytes, stored as SHA-256 only, works once.
+- **It travels in the fragment** (`/verify-email#token=…`), which browsers never send:
+  no access log, trace, gateway or load balancer can record it. The confirmation page
+  has one script, allowed by its hash on that page alone, that copies it into the form
+  and removes it from the address bar.
+- **Opening the link uses nothing up;** pressing "Confirm email" (a POST) does. Mail
+  scanners open every link in an email, but don't press buttons.
+- **Confirming twice, or two links for one email at once,** creates one account: the
+  pending rows of an email are locked in a fixed order first (without it, two
+  confirmations deadlocked).
 
 ## Passwords
 

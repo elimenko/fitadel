@@ -97,4 +97,6 @@ sequenceDiagram
 A user can have several sign-in identities, each keyed by issuer and subject, never by
 email. `identity` is a client of Google: it validates Google's ID token, finds or creates
 the Fitadel user, and then issues Fitadel's own tokens. A Google identity is linked to an
-existing account only after the user proves they own that account.
+existing account only after the user proves they own that account by signing in to
+it, never because the emails match: a verified email proves someone read the inbox,
+not that they created the account (pre-account takeover).
