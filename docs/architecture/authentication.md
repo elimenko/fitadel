@@ -7,7 +7,7 @@ Fitadel's APIs.
 
 > **Status:** Phase 2 in progress. Each part below names the step that implements it.
 > The catalog accepts `identity`'s access tokens since Step 3; clients go through the
-> gateway since Step 4.
+> gateway since Step 4; users can sign in with Google since Step 5.
 
 ## Components
 
@@ -140,3 +140,35 @@ the Fitadel user, and then issues Fitadel's own tokens. A Google identity is lin
 existing account only after the user proves they own that account by signing in to
 it, never because the emails match: a verified email proves someone read the inbox,
 not that they created the account (pre-account takeover).
+
+| Google identity | Account with Google's email | Result                                                      |
+| --------------- | --------------------------- | ----------------------------------------------------------- |
+| linked          | —                           | signed in                                                   |
+| not linked      | none                        | new account (email verified by Google, no password), linked |
+| not linked      | exists                      | the account's password once, then linked                    |
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant I as identity
+    participant G as Google
+
+    Note over B,I: on identity's sign-in page, inside an interaction
+    B->>I: POST /interaction/<uid>/google
+    I->>I: store the attempt: hash of state, PKCE verifier, nonce
+    I-->>B: 303 to Google with state, nonce, code_challenge<br/>+ state cookie for the callback path
+    B->>G: sign in, consent
+    G-->>B: 302 to /interaction/google/callback?code&state
+    B->>I: GET callback (state cookie)
+    I->>I: state matches the cookie; delete the attempt (works once)
+    I->>G: POST /token with code and code_verifier
+    G-->>I: ID token
+    I->>I: verify signature, iss, aud, exp, nonce<br/>(iss, sub) → account: linked, new, or needs a link
+    I-->>B: 303 to /interaction/<uid>/google
+    B->>I: GET (interaction cookie)
+    I-->>B: finish the interaction as after a password,<br/>or "Connect Google" asking for the password
+```
+
+Google's tokens stay inside `identity`; clients and APIs only ever see Fitadel's.
+Details: [the identity README](../../apps/services/identity/README.md#sign-in-with-google).

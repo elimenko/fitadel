@@ -8,7 +8,7 @@ service trusts. Built with NestJS and
 with the other components: [docs/architecture/authentication.md](../../../docs/architecture/authentication.md).
 
 > **Status:** Phase 2 in progress. The OpenID Provider runs at `/oidc` with sign-in,
-> registration confirmed by email, and password reset.
+> registration confirmed by email, password reset, and sign-in with Google.
 
 ## Running it
 
@@ -177,6 +177,53 @@ starts it, the emailed link finishes it.
   as verified.
 - **Two links of one account used at once** take turns: each locks the account row
   first.
+
+### Sign-in with Google
+
+"Continue with Google" on the sign-in page makes identity a client of Google: the
+authorization code flow with PKCE, `state` and `nonce`
+([google-client.ts](src/federation/google-client.ts), openid-client). Google's ID token is
+validated (signature, `iss`, `aud`, `exp`, `nonce`) and mapped to an account
+([federation.service.ts](src/federation/federation.service.ts)):
+
+| Google identity `(iss, sub)` | Account with Google's email | Result                                                     |
+| ---------------------------- | --------------------------- | ---------------------------------------------------------- |
+| linked                       | —                           | signed in                                                  |
+| not linked                   | none                        | new account, email verified, no password; then linked      |
+| not linked                   | exists                      | "Connect Google": the account's password once, then linked |
+
+- **Google must vouch for the email** (`email_verified`), or it can't become a login
+  name: nobody signs in.
+- **Linking needs the password of the account with that email**, never matching
+  emails alone (see Accounts). Signing in to another account in the same interaction
+  links nothing.
+- **Three requests:** `POST /interaction/<uid>/google` stores the attempt and redirects to
+  Google; Google redirects back to the fixed `GET /interaction/google/callback`; that
+  sends the browser on to `GET /interaction/<uid>/google`, where the interaction
+  finishes. The middle hop exists because the interaction cookie only reaches
+  `/interaction/<uid>` ([google.controller.tsx](src/interaction/google.controller.tsx)).
+- **Each attempt works once, in one browser:** `federation_attempt` stores the `state`
+  as SHA-256 with the PKCE verifier and nonce, and the callback deletes it as it reads
+  it (two callbacks at once: one wins). A `state` cookie scoped to the callback path
+  must match, so a callback URL carrying someone else's code is refused (login CSRF).
+  The result waits in `federation_result` for the interaction. Both expire after
+  10 minutes.
+- **A Google-only account can add a password** through "Forgot your password?".
+- **Off unless configured:** without `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` the
+  button is hidden and the routes refuse.
+
+Setting up a Google client (free, no billing account):
+
+1. Google Cloud Console → a new project → **Google Auth Platform**.
+2. **Branding** and **Audience:** External, Testing mode; add the Google accounts that
+   may sign in as test users (up to 100).
+3. **Clients → Create client → Web application**, with the authorized redirect URI
+   `http://localhost:8080/interaction/google/callback` (the gateway's URL).
+4. Put the client id and secret in `.env` as `GOOGLE_CLIENT_ID` and
+   `GOOGLE_CLIENT_SECRET`, then restart the service.
+
+The basic scopes (`openid email profile`) need no declaration and no verification by
+Google. Before a public launch the button must follow Google's branding guidelines.
 
 ## Passwords
 
