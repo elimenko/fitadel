@@ -32,6 +32,7 @@ export const PUBLIC_ROUTE = 'fitadel:public-route';
 /**
  * Lets requests without a token through (the viewer is then null). Every other route
  * requires one: a route nobody marked is closed, not open. A token that is sent is
- * always verified, public route or not.
+ * always verified, public route or not. Behind the gateway, the route also needs an
+ * entry in its public list (tools/gateway/envoy.yaml), or it still answers 401.
  */
 export const Public = () => SetMetadata(PUBLIC_ROUTE, true);

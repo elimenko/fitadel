@@ -57,6 +57,42 @@ static_resources:
                         - match: { prefix: / }
                           direct_response: { status: 404 }
                 http_filters:
+                  # Default-deny for APIs: a valid access token from identity, except on
+                  # the public list. The services verify tokens too (ADR-0009).
+                  - name: envoy.filters.http.jwt_authn
+                    typed_config:
+                      '@type': type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+                      providers:
+                        identity:
+                          issuer: http://localhost:8080/oidc
+                          audiences: [https://api.fitadel.local]
+                          remote_jwks:
+                            http_uri:
+                              uri: http://host.docker.internal:3010/oidc/jwks
+                              cluster: identity
+                              timeout: 2s
+                            # Fetched at startup, not on the first request; an emergency
+                            # key rotation reaches the gateway within this time
+                            cache_duration: 300s
+                            async_fetch: {}
+                          # Keep the header: the services check the token themselves
+                          forward: true
+                      rules:
+                        # Public: the catalog's reads. A token is optional, but one that
+                        # is sent must be valid. Keep in sync with @Public() in the code.
+                        - match:
+                            path_separated_prefix: /api/catalog/v1/foods
+                            headers:
+                              - name: ':method'
+                                string_match: { exact: GET }
+                          requires:
+                            requires_any:
+                              requirements:
+                                - provider_name: identity
+                                - allow_missing: {}
+                        # Everything else under /api/ needs a valid token
+                        - match: { prefix: /api/ }
+                          requires: { provider_name: identity }
                   - name: envoy.filters.http.router
                     typed_config:
                       '@type': type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
