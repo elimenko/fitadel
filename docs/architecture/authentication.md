@@ -6,7 +6,8 @@ External identity providers such as Google sit behind it, so their tokens never 
 Fitadel's APIs.
 
 > **Status:** Phase 2 in progress. Each part below names the step that implements it.
-> The catalog accepts `identity`'s access tokens since Step 3.
+> The catalog accepts `identity`'s access tokens since Step 3; clients go through the
+> gateway since Step 4.
 
 ## Components
 
@@ -54,6 +55,35 @@ is verified even on a public route, so a broken token is never mistaken for
 "anonymous". Expired tokens get `error_description="The access token expired"`, so
 clients know to refresh; unreachable keys answer `503`, not `401`.
 
+## At the gateway
+
+Clients reach everything through one origin, the Envoy gateway
+([ADR-0009](../adr/0009-envoy-api-gateway.md),
+[tools/gateway/envoy.yaml](../../tools/gateway/envoy.yaml)); locally
+`http://localhost:8080`. The issuer is the gateway's URL, `http://localhost:8080/oidc`.
+
+| Path                                                          | Goes to               | Token at the edge            |
+| ------------------------------------------------------------- | --------------------- | ---------------------------- |
+| `/oidc/`, `/interaction/`, `/verify-email`, `/reset-password` | `identity`            | none (sign-in happens here)  |
+| `GET /api/catalog/v1/foods` and below                         | `catalog`, as `/v1/…` | optional, verified when sent |
+| anything else under `/api/`                                   | the service           | required                     |
+| anything else (health checks included)                        | nothing: `404`        | —                            |
+
+- **Default-deny.** A public endpoint needs `@Public()` in the service and an entry in
+  the gateway's list. A missing gateway entry answers `401`; a missing guard is still
+  closed at the edge. Each API service has a test that every other route refuses
+  requests without a token.
+- **Keys** come from `identity`'s JWKS, cached for 5 minutes. After an emergency key
+  rotation, the gateway accepts tokens signed with the old key until its cache expires
+  or it restarts, like the services.
+- **The `Authorization` header is forwarded,** so services verify the token again.
+- **Client IPs.** The gateway drops any `X-Forwarded-For` a client sends and sets its
+  own; `identity` trusts exactly that one hop (`TRUST_PROXY_HOPS=1`) for its per-IP
+  limits.
+- **Rate limits.** Credential form posts (sign-in, registration, password reset, email
+  confirmation) share one bucket of 10 per second with bursts of 20: a flood gets `429`
+  with `x-rate-limited-by: gateway`. Per-IP and per-email limits stay in `identity`.
+
 ## Sign-in flow (`fitadel-dev`)
 
 ```mermaid
@@ -80,19 +110,24 @@ sequenceDiagram
     T->>T: check state
     T->>I: POST /token with code and code_verifier
     I-->>T: access token (aud = API), ID token, refresh token
-    T->>G: GET /v1/foods/... with Authorization: Bearer
+    T->>G: POST /api/catalog/v1/foods with Authorization: Bearer
     G->>I: GET JWKS (cached)
     G->>G: verify signature, iss, aud, exp
-    G->>C: forward the request
+    G->>C: forward as POST /v1/foods
     C->>C: verify the token again, map sub and roles to Viewer
-    C-->>T: 200
-    Note over G: Until Step 4, the tool calls the catalog directly.
+    C-->>T: 201
 ```
+
+For readability the diagram shows the browser and the tool talking to `identity`
+directly; those requests pass through the gateway too, which forwards them unchanged.
 
 ## Trust boundaries
 
 - Services trust only Fitadel's issuer. A Google token is never accepted by an API.
-- The gateway strips any incoming copies of headers it sets itself.
+- The gateway replaces any `X-Forwarded-For` a client sends, and services trust only
+  the one hop it adds. A service port reachable without the gateway would let clients
+  skip its checks and choose their own IP, so in production only the gateway reaches
+  the services.
 - Services verify tokens themselves even behind the gateway, because
   service-to-service calls don't pass through it.
 - Ownership and contributor rules live in the services, not at the gateway.
