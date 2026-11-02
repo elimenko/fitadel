@@ -22,7 +22,7 @@ export const envSchema = z.object({
   /** Give up and answer "not found" rather than keep a scanning user waiting */
   OFF_TIMEOUT_MS: z.coerce.number().int().positive().default(2000),
   /** Identity's issuer URL: access tokens must carry it as `iss` */
-  AUTH_ISSUER: z.url().default('http://localhost:3010/oidc'),
+  AUTH_ISSUER: z.url().default('http://localhost:8080/oidc'),
   /** This API's identifier: tokens must carry it as `aud` (identity's OIDC_API_AUDIENCE) */
   AUTH_AUDIENCE: z.url().default('https://api.fitadel.local'),
   /**
