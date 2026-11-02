@@ -41,6 +41,37 @@ static_resources:
                     - name: fitadel
                       domains: ['*']
                       routes:
+                        # Credential forms: each costs a password hash, a breach check
+                        # or an email. One bucket for all clients caps the total, so a
+                        # flood stops here; identity's per-IP and per-email limits
+                        # (Postgres) keep one client from using it all up.
+                        - match:
+                            safe_regex:
+                              regex: ^/(interaction/[^/]+/(login|register|forgot)|reset-password|verify-email)$
+                            headers:
+                              - name: ':method'
+                                string_match: { exact: POST }
+                          route: { cluster: identity }
+                          typed_per_filter_config:
+                            envoy.filters.http.local_ratelimit:
+                              '@type': type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+                              stat_prefix: credential_forms
+                              token_bucket:
+                                max_tokens: 20
+                                tokens_per_fill: 10
+                                fill_interval: 1s
+                              filter_enabled:
+                                default_value:
+                                  { numerator: 100, denominator: HUNDRED }
+                              filter_enforced:
+                                default_value:
+                                  { numerator: 100, denominator: HUNDRED }
+                              # Tells a 429 from the gateway apart from identity's own;
+                              # the bucket refills every second
+                              response_headers_to_add:
+                                - header:
+                                    { key: x-rate-limited-by, value: gateway }
+                                - header: { key: retry-after, value: '1' }
                         # Identity keeps its own paths
                         - match: { prefix: /oidc/ }
                           route: { cluster: identity }
@@ -57,6 +88,12 @@ static_resources:
                         - match: { prefix: / }
                           direct_response: { status: 404 }
                 http_filters:
+                  # Off unless a route configures it (credential forms above); runs
+                  # first, so a rejected request costs no token verification
+                  - name: envoy.filters.http.local_ratelimit
+                    typed_config:
+                      '@type': type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+                      stat_prefix: local_rate_limit
                   # Default-deny for APIs: a valid access token from identity, except on
                   # the public list. The services verify tokens too (ADR-0009).
                   - name: envoy.filters.http.jwt_authn
