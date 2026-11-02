@@ -81,10 +81,15 @@ The rules:
 barcode, a food by id) works without one; adding, changing and retiring foods need one.
 Endpoints only see a `Viewer { id, roles }`.
 
+Clients call the catalog through the gateway, under `/api/catalog/` (ADR-0009), which
+checks the token first. A new public endpoint needs `@Public()` here and an entry in the
+gateway's public list ([tools/gateway/envoy.yaml](../../../tools/gateway/envoy.yaml)); an
+integration test fails when a route without `@Public()` answers without a token.
+
 ```sh
 # A token from tools/fitadel-dev (sign in once with `pnpm nx run fitadel-dev:login`)
 TOKEN=$(node tools/fitadel-dev/dist/main.js token)
-curl -X POST localhost:3000/v1/foods -H "Authorization: Bearer $TOKEN"   -H 'Content-Type: application/json'   -d '{"names":{"en":"My oats"},"per100":{"kcal":380,"protein":13,"fat":7,"carbs":60}}'
+curl -X POST localhost:8080/api/catalog/v1/foods -H "Authorization: Bearer $TOKEN"   -H 'Content-Type: application/json'   -d '{"names":{"en":"My oats"},"per100":{"kcal":380,"protein":13,"fat":7,"carbs":60}}'
 ```
 
 ## Search
