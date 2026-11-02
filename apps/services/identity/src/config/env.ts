@@ -61,6 +61,12 @@ export const envSchema = z.object({
    */
   OIDC_ISSUER: z.url().default('http://localhost:3010/oidc'),
   /**
+   * Proxies in front of the service (the gateway) whose X-Forwarded-For entry is
+   * trusted as the client's IP, for per-IP rate limits. 0 trusts no header: a client
+   * that reaches the service directly could otherwise pick its own IP.
+   */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+  /**
    * The audience of access tokens: the API that accepts them. Services reject tokens
    * whose `aud` isn't this.
    */

@@ -3,18 +3,23 @@ import { shutdownTelemetry } from './instrumentation';
 
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app/app.module';
+import { trustProxies } from './app/proxy';
 import type { Env } from './config/env';
 import { OIDC_PROVIDER } from './oidc/oidc.module';
 import type Provider from 'oidc-provider';
 
 async function bootstrap() {
   // Buffer Nest's startup logs until the pino logger is ready
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: true,
+  });
   const logger = app.get(Logger);
   app.useLogger(logger);
   const config = app.get<ConfigService<Env, true>>(ConfigService);
+  trustProxies(app, config.get('TRUST_PROXY_HOPS', { infer: true }));
 
   // The OpenID Provider is a Koa app; Express strips the /oidc prefix before handing
   // requests over, and the issuer URL (OIDC_ISSUER) tells it where it lives.
