@@ -30,6 +30,7 @@ describe('validateEnv', () => {
       SMTP_URL: 'smtp://localhost:1025',
       MAIL_FROM: 'Fitadel <no-reply@fitadel.local>',
       OIDC_ISSUER: 'http://localhost:3010/oidc',
+      TRUST_PROXY_HOPS: 0,
       OIDC_API_AUDIENCE: 'https://api.fitadel.local',
       OIDC_JWKS: { keys: [{ ...key, alg: 'ES256', use: 'sig' }] },
       OIDC_COOKIE_KEYS: [OIDC_COOKIE_KEYS],
