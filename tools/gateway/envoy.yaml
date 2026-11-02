@@ -41,13 +41,13 @@ static_resources:
                     - name: fitadel
                       domains: ['*']
                       routes:
-                        # Credential forms: each costs a password hash, a breach check
-                        # or an email. One bucket for all clients caps the total, so a
+                        # Credential forms: each costs a password hash, a breach check,
+                        # an email or a stored sign-in attempt (Google). One bucket for all clients caps the total, so a
                         # flood stops here; identity's per-IP and per-email limits
                         # (Postgres) keep one client from using it all up.
                         - match:
                             safe_regex:
-                              regex: ^/(interaction/[^/]+/(login|register|forgot)|reset-password|verify-email)$
+                              regex: ^/(interaction/[^/]+/(login|register|forgot|google)|reset-password|verify-email)$
                             headers:
                               - name: ':method'
                                 string_match: { exact: POST }
