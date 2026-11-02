@@ -60,6 +60,19 @@ services:
       timeout: 3s
       retries: 10
 
+  # Development-only API gateway (ADR-0009): one origin in front of the services, which
+  # run on the host (nx serve), reached through host.docker.internal.
+  gateway:
+    image: envoyproxy/envoy:v1.40.0@sha256:459f2a6404c340fe6afccd69d85527012d47f3c036765493e6f8f3113fa384de
+    command: ['-c', '/etc/envoy/envoy.yaml']
+    extra_hosts:
+      - 'host.docker.internal:host-gateway' # Docker Desktop has it; Linux (CI) needs this
+    ports:
+      - '127.0.0.1:8080:8080' # Public entry point
+      - '127.0.0.1:9901:9901' # Admin: stats, config dump (never expose beyond loopback)
+    volumes:
+      - ./tools/gateway/envoy.yaml:/etc/envoy/envoy.yaml:ro
+
 volumes:
   postgres-data:
   lgtm-data:

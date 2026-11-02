@@ -29,7 +29,7 @@ describe('validateEnv', () => {
       OUTBOUND_USER_AGENT: 'Fitadel/0.1 (+https://github.com/elimenko/fitadel)',
       SMTP_URL: 'smtp://localhost:1025',
       MAIL_FROM: 'Fitadel <no-reply@fitadel.local>',
-      OIDC_ISSUER: 'http://localhost:3010/oidc',
+      OIDC_ISSUER: 'http://localhost:8080/oidc',
       TRUST_PROXY_HOPS: 0,
       OIDC_API_AUDIENCE: 'https://api.fitadel.local',
       OIDC_JWKS: { keys: [{ ...key, alg: 'ES256', use: 'sig' }] },

@@ -1,0 +1,88 @@
+# Local API gateway (ADR-0009): one origin in front of the services, which run on the
+# host (nx serve) and are reached through host.docker.internal.
+admin:
+  address:
+    # Inside the container; compose.yaml publishes it on the host's loopback only
+    socket_address: { address: 0.0.0.0, port_value: 9901 }
+
+static_resources:
+  listeners:
+    - name: public
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 8080 }
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                '@type': type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: public
+                # The client's address is the TCP peer, not a header it sends
+                use_remote_address: true
+                xff_num_trusted_hops: 0
+                # Runs before X-Forwarded-For is set: drop any copy the client sent, so
+                # the services receive only the address Envoy saw
+                early_header_mutation_extensions:
+                  - name: envoy.http.early_header_mutation.header_mutation
+                    typed_config:
+                      '@type': type.googleapis.com/envoy.extensions.http.early_header_mutation.header_mutation.v3.HeaderMutation
+                      mutations:
+                        - remove: x-forwarded-for
+                # Routes and auth rules match on paths: /api//x, /api/./x or an encoded
+                # slash must not slip past a rule
+                normalize_path: true
+                merge_slashes: true
+                path_with_escaped_slashes_action: REJECT_REQUEST
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      '@type': type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                route_config:
+                  virtual_hosts:
+                    - name: fitadel
+                      domains: ['*']
+                      routes:
+                        # Identity keeps its own paths
+                        - match: { prefix: /oidc/ }
+                          route: { cluster: identity }
+                        - match: { prefix: /interaction/ }
+                          route: { cluster: identity }
+                        - match: { path: /verify-email }
+                          route: { cluster: identity }
+                        - match: { path: /reset-password }
+                          route: { cluster: identity }
+                        # APIs: /api/catalog/v1/foods reaches the catalog as /v1/foods
+                        - match: { prefix: /api/catalog/ }
+                          route: { cluster: catalog, prefix_rewrite: / }
+                        # Everything else, health checks included, isn't public
+                        - match: { prefix: / }
+                          direct_response: { status: 404 }
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      '@type': type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+  clusters:
+    - name: identity
+      type: STRICT_DNS
+      # Docker Desktop lists an IPv6 host.docker.internal too, which doesn't reach the
+      # host; Envoy's default tries IPv6 first
+      dns_lookup_family: V4_PREFERRED
+      load_assignment:
+        cluster_name: identity
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      { address: host.docker.internal, port_value: 3010 }
+    - name: catalog
+      type: STRICT_DNS
+      dns_lookup_family: V4_PREFERRED
+      load_assignment:
+        cluster_name: catalog
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      { address: host.docker.internal, port_value: 3000 }

@@ -38,8 +38,9 @@ pnpm nx graph   # explore the project graph
 
 Backing services run in Docker: PostgreSQL, an observability stack
 ([grafana/otel-lgtm](https://github.com/grafana/docker-otel-lgtm)) that receives
-OpenTelemetry data, and [Mailpit](https://mailpit.axllent.org), which catches every
-email the services send. Prerequisite: Docker with Compose v2.
+OpenTelemetry data, [Mailpit](https://mailpit.axllent.org), which catches every
+email the services send, and the [Envoy](https://www.envoyproxy.io) API gateway
+([ADR-0009](docs/adr/0009-envoy-api-gateway.md)). Prerequisite: Docker with Compose v2.
 
 ```sh
 cp .env.example .env    # then adjust the values
@@ -49,6 +50,12 @@ docker compose down     # stop; add -v to also delete the data volumes
 
 Grafana runs at http://localhost:3001, with traces (Tempo), metrics (Prometheus)
 and logs (Loki) from the services. Mailpit's inbox is at http://localhost:8025.
+
+The gateway at http://localhost:8080 is the one entry point for clients: identity's
+pages under `/oidc`, `/interaction`, `/verify-email` and `/reset-password`, and each API
+under `/api/<service>/` (`/api/catalog/v1/foods` reaches the catalog as `/v1/foods`).
+It forwards to the services running on the host ([tools/gateway](tools/gateway/envoy.yaml));
+its admin interface (stats, configuration) is at http://localhost:9901.
 
 A fresh data volume provisions each service's database and roles on first start
 ([tools/db](tools/db)). For an existing volume, run a service's script once, e.g.

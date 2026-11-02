@@ -19,8 +19,14 @@ Prerequisites: the local infrastructure from the [root README](../../../README.m
 cp apps/services/identity/.env.example apps/services/identity/.env
 pnpm nx run identity:generate-keys            # signing and cookie keys, into .env
 pnpm nx run identity:prisma migrate deploy   # apply migrations
-pnpm nx serve identity                       # http://localhost:3010
+pnpm nx serve identity                       # on :3010, used through the gateway
 ```
+
+Clients use identity through the gateway at `http://localhost:8080`
+([ADR-0009](../../../docs/adr/0009-envoy-api-gateway.md)): the issuer is the gateway's URL,
+so tokens issued on `:3010` directly carry a different `iss` and services refuse them.
+The service trusts the gateway's `X-Forwarded-For` entry as the client IP
+(`TRUST_PROXY_HOPS=1`); with no gateway in front, set it to 0.
 
 | Target                          | What it does                         |
 | ------------------------------- | ------------------------------------ |

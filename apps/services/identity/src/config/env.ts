@@ -59,7 +59,7 @@ export const envSchema = z.object({
    * The provider's public URL, mount path included: the `iss` claim every verifier
    * checks, so it must match exactly what clients see (the gateway's URL behind one)
    */
-  OIDC_ISSUER: z.url().default('http://localhost:3010/oidc'),
+  OIDC_ISSUER: z.url().default('http://localhost:8080/oidc'),
   /**
    * Proxies in front of the service (the gateway) whose X-Forwarded-For entry is
    * trusted as the client's IP, for per-IP rate limits. 0 trusts no header: a client

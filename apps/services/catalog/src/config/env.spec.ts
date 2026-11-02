@@ -13,7 +13,7 @@ describe('validateEnv', () => {
       OFF_API_URL: 'https://world.openfoodfacts.org',
       OFF_USER_AGENT: 'Fitadel/0.1 (+https://github.com/elimenko/fitadel)',
       OFF_TIMEOUT_MS: 2000,
-      AUTH_ISSUER: 'http://localhost:3010/oidc',
+      AUTH_ISSUER: 'http://localhost:8080/oidc',
       AUTH_AUDIENCE: 'https://api.fitadel.local',
     });
   });

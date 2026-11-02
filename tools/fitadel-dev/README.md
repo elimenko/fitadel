@@ -4,7 +4,8 @@ A command-line client for local development: signs in through the browser and ha
 access tokens for calling Fitadel's API, like `gh auth login` or `gcloud auth login`.
 
 ```sh
-pnpm nx serve identity                     # the OpenID Provider, on :3010
+docker compose up -d                       # the gateway, on :8080
+pnpm nx serve identity                     # the OpenID Provider, behind it
 pnpm nx run fitadel-dev:login              # opens the browser to sign in
 pnpm nx run fitadel-dev:whoami             # the access token's claims
 # The token alone on stdout: run the built tool directly (Nx adds its own output)
@@ -27,4 +28,4 @@ pnpm nx run fitadel-dev:logout             # deletes the stored tokens
   `NODE_ENV`): it's public and anyone can run it.
 
 `FITADEL_ISSUER` points the tool at another issuer (default
-`http://localhost:3010/oidc`).
+`http://localhost:8080/oidc`, identity through the gateway).
