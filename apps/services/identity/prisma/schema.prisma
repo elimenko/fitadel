@@ -32,8 +32,9 @@ model Account {
   password     AccountPassword?
   identities   AccountIdentity[]
   resets       PasswordReset[]
-  roles        AccountRole[]     @relation("roles")
-  rolesGranted AccountRole[]     @relation("grantedBy")
+  roles        AccountRole[]      @relation("roles")
+  rolesGranted AccountRole[]      @relation("grantedBy")
+  federations  FederationResult[]
 
   @@map("account")
 }
@@ -172,4 +173,43 @@ model RateLimit {
   @@id([key, windowStart])
   @@index([windowStart])
   @@map("rate_limit")
+}
+
+/// A sign-in with an external provider (Google) between the redirect to the provider
+/// and its callback. The callback finds the row by `state` and deletes it in the same
+/// statement, so a replayed callback finds nothing.
+model FederationAttempt {
+  /// SHA-256 of the `state` parameter; the value itself is only in the URL and a cookie
+  stateHash      Bytes    @id @map("state_hash")
+  /// The oidc-provider interaction the sign-in belongs to
+  interactionUid String   @map("interaction_uid")
+  /// PKCE verifier and nonce for this attempt; the provider only ever sees derived values
+  codeVerifier   String   @map("code_verifier")
+  nonce          String
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz
+
+  @@index([expiresAt])
+  @@map("federation_attempt")
+}
+
+/// What a provider's callback found, picked up by the interaction it belongs to. The
+/// callback can't finish the interaction itself: the interaction cookie only reaches
+/// /interaction/<uid>.
+model FederationResult {
+  interactionUid String   @id @map("interaction_uid")
+  /// signed_in: accountId signs in. link_required: accountId has the provider's email,
+  /// and the identity is linked to it only after a password sign-in. email_unverified:
+  /// the provider didn't vouch for the email, so nobody signs in. failed: the provider
+  /// returned an error (or the user cancelled there).
+  outcome        String
+  accountId      String?  @map("account_id") @db.Uuid
+  account        Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// The external identity to link (link_required only)
+  issuer         String?
+  subject        String?
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz
+
+  @@index([accountId])
+  @@index([expiresAt])
+  @@map("federation_result")
 }

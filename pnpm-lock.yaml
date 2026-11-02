@@ -573,6 +573,9 @@ importers:
       oidc-provider:
         specifier: 9.13.3
         version: 9.13.3(supports-color@7.2.0)
+      openid-client:
+        specifier: 6.8.8
+        version: 6.8.8
       pg:
         specifier: ^8.23.1
         version: 8.23.1

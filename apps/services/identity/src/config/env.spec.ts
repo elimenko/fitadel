@@ -34,7 +34,21 @@ describe('validateEnv', () => {
       OIDC_API_AUDIENCE: 'https://api.fitadel.local',
       OIDC_JWKS: { keys: [{ ...key, alg: 'ES256', use: 'sig' }] },
       OIDC_COOKIE_KEYS: [OIDC_COOKIE_KEYS],
+      GOOGLE_ISSUER: 'https://accounts.google.com',
     });
+  });
+
+  it('needs both Google client settings or neither', () => {
+    expect(() => validateEnv({ ...valid, GOOGLE_CLIENT_ID: 'id' })).toThrow(
+      /GOOGLE_CLIENT_SECRET/,
+    );
+    expect(
+      validateEnv({
+        ...valid,
+        GOOGLE_CLIENT_ID: 'id',
+        GOOGLE_CLIENT_SECRET: 'secret',
+      }),
+    ).toMatchObject({ GOOGLE_CLIENT_ID: 'id', GOOGLE_CLIENT_SECRET: 'secret' });
   });
 
   it('requires a Postgres DATABASE_URL', () => {

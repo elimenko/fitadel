@@ -18,6 +18,25 @@ describe('SignInPage', () => {
     expect(html).toContain('autoComplete="current-password"');
   });
 
+  it('offers Google only when it is configured, as a POST to the interaction', () => {
+    expect(renderToStaticMarkup(<SignInPage uid="u" />)).not.toContain(
+      'Google',
+    );
+    expect(renderToStaticMarkup(<SignInPage uid="u" google />)).toContain(
+      'action="/interaction/u/google"',
+    );
+  });
+
+  it('asks for the password to connect Google, without offering Google again', () => {
+    const html = renderToStaticMarkup(
+      <SignInPage uid="u" email="bob@gmail.com" google linkingGoogle />,
+    );
+
+    expect(html).toContain('Connect Google');
+    expect(html).toContain('value="bob@gmail.com"');
+    expect(html).not.toContain('action="/interaction/u/google"');
+  });
+
   it('escapes what the user typed, so it cannot become markup', () => {
     const html = renderToStaticMarkup(
       <SignInPage uid="u" email={'"><script>alert(1)</script>'} error="Nope" />,

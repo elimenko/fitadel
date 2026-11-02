@@ -11,7 +11,9 @@ import {
 import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { createServer as createHttpServer } from 'node:http';
 import { join } from 'node:path';
+import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { Client } from 'pg';
 import { AccountService } from './account/account.service';
 import { PasswordHasher } from './account/password-hasher';
@@ -19,6 +21,11 @@ import { PasswordResetService } from './account/password-reset.service';
 import { RegistrationService } from './account/registration.service';
 import { PublicUrl } from './config/public-url';
 import { EmailOutboxSender, enqueueEmail } from './email/email-outbox';
+import {
+  FEDERATION_TTL_MS,
+  FederationService,
+} from './federation/federation.service';
+import { GoogleClient } from './federation/google-client';
 import { type EmailMessage, Mailer } from './email/mailer';
 import { PrismaClient } from './generated/prisma/client';
 import type { PrismaService } from './prisma/prisma.service';
@@ -799,5 +806,271 @@ describe('email outbox', () => {
     const { nextAttemptAt } = await db.emailOutbox.findFirstOrThrow();
     expect((await sender.sendDue(nextAttemptAt)).sent).toBe(1);
     expect(mailer.sent).toEqual(['later@example.com']);
+  });
+});
+
+describe('sign-in with Google (a fake Google)', () => {
+  const CLIENT_ID = 'fitadel-test.apps.googleusercontent.com';
+  const REDIRECT_URI = 'http://localhost:8080/interaction/google/callback';
+  let db: PrismaClient;
+  let federation: FederationService;
+  const fakeGoogle = {
+    issuer: '',
+    server: createHttpServer(),
+    keys: undefined as unknown as Awaited<ReturnType<typeof generateKeyPair>>,
+    /** Codes Google has handed out, with what the token endpoint must check */
+    codes: new Map<
+      string,
+      { challenge: string; nonce: string; claims: Record<string, unknown> }
+    >(),
+  };
+
+  /** The user signs in at Google, which redirects back with a code */
+  function googleSignsIn(
+    authorizationUrl: URL,
+    claims: Record<string, unknown>,
+  ) {
+    const code = randomBytes(16).toString('hex');
+    fakeGoogle.codes.set(code, {
+      challenge: authorizationUrl.searchParams.get('code_challenge') ?? '',
+      nonce: authorizationUrl.searchParams.get('nonce') ?? '',
+      claims,
+    });
+    const callback = new URL(REDIRECT_URI);
+    callback.searchParams.set('code', code);
+    callback.searchParams.set(
+      'state',
+      authorizationUrl.searchParams.get('state') ?? '',
+    );
+    return callback;
+  }
+
+  const alice = (overrides: Record<string, unknown> = {}) => ({
+    sub: '1000001',
+    email: 'Alice@Gmail.com',
+    email_verified: true,
+    name: 'Alice',
+    ...overrides,
+  });
+
+  /** One full round trip; returns the interaction uid the callback resolved to */
+  async function signInWithGoogle(
+    uid: string,
+    claims: Record<string, unknown>,
+  ) {
+    const { url, state } = await federation.startGoogle(uid);
+    return federation.finishGoogle(googleSignsIn(url, claims), state);
+  }
+
+  beforeAll(async () => {
+    fakeGoogle.keys = await generateKeyPair('RS256');
+    const jwk = { ...(await exportJWK(fakeGoogle.keys.publicKey)), kid: 'k1' };
+    fakeGoogle.server.on('request', async (req, res) => {
+      const json = (status: number, body: unknown) => {
+        res.writeHead(status, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(body));
+      };
+      const path = new URL(req.url ?? '/', fakeGoogle.issuer).pathname;
+      if (path === '/.well-known/openid-configuration') {
+        return json(200, {
+          issuer: fakeGoogle.issuer,
+          authorization_endpoint: `${fakeGoogle.issuer}/auth`,
+          token_endpoint: `${fakeGoogle.issuer}/token`,
+          jwks_uri: `${fakeGoogle.issuer}/jwks`,
+          response_types_supported: ['code'],
+          subject_types_supported: ['public'],
+          id_token_signing_alg_values_supported: ['RS256'],
+          code_challenge_methods_supported: ['S256'],
+        });
+      }
+      if (path === '/jwks') return json(200, { keys: [jwk] });
+      if (path === '/token' && req.method === 'POST') {
+        let body = '';
+        for await (const chunk of req) body += chunk;
+        const form = new URLSearchParams(body);
+        const code = form.get('code') ?? '';
+        const issued = fakeGoogle.codes.get(code);
+        fakeGoogle.codes.delete(code);
+        const challenge = createHash('sha256')
+          .update(form.get('code_verifier') ?? '')
+          .digest('base64url');
+        if (
+          !issued ||
+          challenge !== issued.challenge ||
+          form.get('redirect_uri') !== REDIRECT_URI
+        ) {
+          return json(400, { error: 'invalid_grant' });
+        }
+        const idToken = await new SignJWT({
+          ...issued.claims,
+          nonce: issued.nonce,
+        })
+          .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
+          .setIssuer(fakeGoogle.issuer)
+          .setAudience(CLIENT_ID)
+          .setIssuedAt()
+          .setExpirationTime('5m')
+          .sign(fakeGoogle.keys.privateKey);
+        return json(200, {
+          access_token: 'google-access-token',
+          token_type: 'Bearer',
+          expires_in: 3600,
+          id_token: idToken,
+        });
+      }
+      json(404, {});
+    });
+    await new Promise<void>((resolve) =>
+      fakeGoogle.server.listen(0, '127.0.0.1', resolve),
+    );
+    const { port } = fakeGoogle.server.address() as { port: number };
+    fakeGoogle.issuer = `http://127.0.0.1:${port}`;
+
+    db = new PrismaClient({
+      adapter: new PrismaPg({ connectionString: urls.app }),
+    });
+    federation = new FederationService(
+      db as unknown as PrismaService,
+      new GoogleClient({
+        issuer: fakeGoogle.issuer,
+        clientId: CLIENT_ID,
+        clientSecret: 'test-secret',
+        redirectUri: REDIRECT_URI,
+      }),
+    );
+  });
+
+  afterAll(async () => {
+    await db.$disconnect();
+    await new Promise((resolve) => fakeGoogle.server.close(resolve));
+  });
+
+  it('creates a verified account for a new Google user, then signs them in again', async () => {
+    expect(await signInWithGoogle('uid-new-1', alice())).toBe('uid-new-1');
+    const first = await federation.resultFor('uid-new-1');
+    expect(first).toMatchObject({ outcome: 'signed_in' });
+    const accountId = (first as { accountId: string }).accountId;
+    const account = await db.account.findUniqueOrThrow({
+      where: { id: accountId },
+      include: { identities: true, password: true },
+    });
+    expect(account).toMatchObject({
+      email: 'alice@gmail.com',
+      displayName: 'Alice',
+      password: null,
+      identities: [{ issuer: fakeGoogle.issuer, subject: '1000001' }],
+    });
+    expect(account.emailVerifiedAt).not.toBeNull();
+    // Used up: picking it up twice finds nothing
+    expect(await federation.resultFor('uid-new-1')).toBeUndefined();
+
+    // Another sign-in, even with a changed email at Google: the same account
+    await signInWithGoogle('uid-new-2', alice({ email: 'alice@new.example' }));
+    expect(await federation.resultFor('uid-new-2')).toEqual({
+      outcome: 'signed_in',
+      accountId,
+    });
+    expect(
+      await db.account.count({ where: { email: 'alice@new.example' } }),
+    ).toBe(0);
+  });
+
+  it('links an existing account only after its password sign-in', async () => {
+    const owner = await db.account.create({
+      data: { email: 'bob@gmail.com', emailVerifiedAt: new Date() },
+    });
+    const other = await db.account.create({
+      data: { email: 'mallory@example.com', emailVerifiedAt: new Date() },
+    });
+    const bob = alice({ sub: '2000002', email: 'bob@gmail.com', name: 'Bob' });
+
+    await signInWithGoogle('uid-link-1', bob);
+    expect(await federation.resultFor('uid-link-1')).toEqual({
+      outcome: 'link_required',
+      email: 'bob@gmail.com',
+    });
+    expect(await federation.isLinkPending('uid-link-1')).toBe(true);
+    // Signing in to another account in that interaction links nothing
+    expect(await federation.linkAfterSignIn('uid-link-1', other.id)).toBe(
+      false,
+    );
+    expect(await federation.isLinkPending('uid-link-1')).toBe(false);
+
+    await signInWithGoogle('uid-link-2', bob);
+    expect(await federation.linkAfterSignIn('uid-link-2', owner.id)).toBe(true);
+    // A double submit of the password form links once
+    expect(await federation.linkAfterSignIn('uid-link-2', owner.id)).toBe(
+      false,
+    );
+    expect(
+      await db.accountIdentity.findMany({ where: { accountId: owner.id } }),
+    ).toMatchObject([{ subject: '2000002' }]);
+
+    await signInWithGoogle('uid-link-3', bob);
+    expect(await federation.resultFor('uid-link-3')).toEqual({
+      outcome: 'signed_in',
+      accountId: owner.id,
+    });
+  });
+
+  it('refuses an email Google has not verified', async () => {
+    await signInWithGoogle(
+      'uid-unverified',
+      alice({
+        sub: '3000003',
+        email: 'carol@example.com',
+        email_verified: false,
+      }),
+    );
+    expect(await federation.resultFor('uid-unverified')).toEqual({
+      outcome: 'email_unverified',
+    });
+    expect(
+      await db.account.count({ where: { email: 'carol@example.com' } }),
+    ).toBe(0);
+  });
+
+  it('refuses a callback from another browser, a replay and an expired attempt', async () => {
+    const { url, state } = await federation.startGoogle('uid-csrf');
+    const callback = googleSignsIn(url, alice());
+    // Another browser: no state cookie, or someone else's
+    expect(await federation.finishGoogle(callback, undefined)).toBeUndefined();
+    expect(
+      await federation.finishGoogle(callback, 'x'.repeat(43)),
+    ).toBeUndefined();
+    // The right browser, once
+    expect(await federation.finishGoogle(callback, state)).toBe('uid-csrf');
+    expect(await federation.finishGoogle(callback, state)).toBeUndefined();
+
+    const later = new Date(Date.now() + FEDERATION_TTL_MS + 1000);
+    const expired = await federation.startGoogle('uid-expired');
+    expect(
+      await federation.finishGoogle(
+        googleSignsIn(expired.url, alice()),
+        expired.state,
+        later,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('reports a failure when Google returns an error or refuses the code', async () => {
+    const { url, state } = await federation.startGoogle('uid-cancel');
+    const cancelled = new URL(REDIRECT_URI);
+    cancelled.searchParams.set('error', 'access_denied');
+    cancelled.searchParams.set('state', url.searchParams.get('state') ?? '');
+    expect(await federation.finishGoogle(cancelled, state)).toBe('uid-cancel');
+    expect(await federation.resultFor('uid-cancel')).toEqual({
+      outcome: 'failed',
+    });
+
+    // A code issued for another attempt: its PKCE challenge doesn't match
+    const mine = await federation.startGoogle('uid-pkce');
+    const theirs = await federation.startGoogle('uid-pkce-other');
+    const stolen = googleSignsIn(theirs.url, alice());
+    stolen.searchParams.set('state', mine.url.searchParams.get('state') ?? '');
+    expect(await federation.finishGoogle(stolen, mine.state)).toBe('uid-pkce');
+    expect(await federation.resultFor('uid-pkce')).toEqual({
+      outcome: 'failed',
+    });
   });
 });
