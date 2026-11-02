@@ -26,16 +26,40 @@ export interface SignInPageProps {
   /** Kept after a failed attempt, so the user only retypes the password */
   email?: string;
   error?: string;
+  /** Offer "Continue with Google" (configured) */
+  google?: boolean;
+  /** Back from Google with the email of an existing account: sign in to link it */
+  linkingGoogle?: boolean;
 }
 
-export function SignInPage({ uid, email, error }: SignInPageProps) {
+export function SignInPage({
+  uid,
+  email,
+  error,
+  google,
+  linkingGoogle,
+}: SignInPageProps) {
   return (
     <Layout title="Sign in">
-      <h1>Sign in to Fitadel</h1>
+      <h1>{linkingGoogle ? 'Connect Google' : 'Sign in to Fitadel'}</h1>
+      {linkingGoogle && (
+        <p>
+          You already have a Fitadel account with this email. Sign in with your
+          password once to connect Google; after that, Continue with Google
+          signs you in.
+        </p>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
         </p>
+      )}
+      {google && !linkingGoogle && (
+        <form method="post" action={`/interaction/${uid}/google`}>
+          <button type="submit" className="secondary">
+            Continue with Google
+          </button>
+        </form>
       )}
       <form method="post" action={`/interaction/${uid}/login`}>
         <label htmlFor="email">Email</label>

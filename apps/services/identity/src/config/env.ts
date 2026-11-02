@@ -26,76 +26,97 @@ const json = z.string().transform((value, ctx) => {
 });
 
 /** Environment variables the service reads. Values arrive as strings and are parsed here. */
-export const envSchema = z.object({
-  NODE_ENV: z
-    .enum(['development', 'test', 'production'])
-    .default('development'),
-  PORT: z.coerce.number().int().min(1).max(65535).default(3010),
-  LOG_LEVEL: z
-    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
-    .default('info'),
-  /** Runtime connection, as the identity_app role */
-  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
-  /**
-   * Reject passwords found in data breaches (Have I Been Pwned). "disabled" is for
-   * offline development; the check fails open when the API is unreachable anyway.
-   */
-  PASSWORD_BREACH_CHECK: z.enum(['enabled', 'disabled']).default('enabled'),
-  HIBP_API_URL: z.url().default('https://api.pwnedpasswords.com'),
-  /** Give up and allow the password rather than keep a registering user waiting */
-  HIBP_TIMEOUT_MS: z.coerce.number().int().positive().default(2000),
-  /** How the service identifies itself to external APIs */
-  OUTBOUND_USER_AGENT: z
-    .string()
-    .min(1)
-    .default('Fitadel/0.1 (+https://github.com/elimenko/fitadel)'),
-  /**
-   * The mail server: Mailpit locally (compose.yaml), Amazon SES in production, with
-   * credentials in the URL (smtps://user:password@host:465). Production requires TLS.
-   */
-  SMTP_URL: z.url({ protocol: /^smtps?$/ }).default('smtp://localhost:1025'),
-  MAIL_FROM: z.string().min(1).default('Fitadel <no-reply@fitadel.local>'),
-  /**
-   * The provider's public URL, mount path included: the `iss` claim every verifier
-   * checks, so it must match exactly what clients see (the gateway's URL behind one)
-   */
-  OIDC_ISSUER: z.url().default('http://localhost:8080/oidc'),
-  /**
-   * Proxies in front of the service (the gateway) whose X-Forwarded-For entry is
-   * trusted as the client's IP, for per-IP rate limits. 0 trusts no header: a client
-   * that reaches the service directly could otherwise pick its own IP.
-   */
-  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
-  /**
-   * The audience of access tokens: the API that accepts them. Services reject tokens
-   * whose `aud` isn't this.
-   */
-  OIDC_API_AUDIENCE: z.url().default('https://api.fitadel.local'),
-  /**
-   * Signing keys as a JWK set. The first key signs; all are published, so a new key is
-   * added second, moved first once verifiers have cached it, and the old one removed
-   * after its last token expires. Generate with `nx run identity:generate-keys`.
-   */
-  OIDC_JWKS: json.pipe(
-    z.object({
-      keys: z
-        .array(signingKey)
-        .min(1)
-        .refine(
-          (keys) => new Set(keys.map((key) => key.kid)).size === keys.length,
-          'every kid must be unique',
-        ),
-    }),
-  ),
-  /**
-   * Comma-separated keys that sign the provider's cookies (session, sign-in in
-   * progress). The first signs; all verify, so they rotate like OIDC_JWKS.
-   */
-  OIDC_COOKIE_KEYS: z
-    .string()
-    .transform((value) => value.split(','))
-    .pipe(z.array(z.string().min(32, 'each key needs at least 32 characters'))),
-});
+export const envSchema = z
+  .object({
+    NODE_ENV: z
+      .enum(['development', 'test', 'production'])
+      .default('development'),
+    PORT: z.coerce.number().int().min(1).max(65535).default(3010),
+    LOG_LEVEL: z
+      .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
+      .default('info'),
+    /** Runtime connection, as the identity_app role */
+    DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+    /**
+     * Reject passwords found in data breaches (Have I Been Pwned). "disabled" is for
+     * offline development; the check fails open when the API is unreachable anyway.
+     */
+    PASSWORD_BREACH_CHECK: z.enum(['enabled', 'disabled']).default('enabled'),
+    HIBP_API_URL: z.url().default('https://api.pwnedpasswords.com'),
+    /** Give up and allow the password rather than keep a registering user waiting */
+    HIBP_TIMEOUT_MS: z.coerce.number().int().positive().default(2000),
+    /** How the service identifies itself to external APIs */
+    OUTBOUND_USER_AGENT: z
+      .string()
+      .min(1)
+      .default('Fitadel/0.1 (+https://github.com/elimenko/fitadel)'),
+    /**
+     * The mail server: Mailpit locally (compose.yaml), Amazon SES in production, with
+     * credentials in the URL (smtps://user:password@host:465). Production requires TLS.
+     */
+    SMTP_URL: z.url({ protocol: /^smtps?$/ }).default('smtp://localhost:1025'),
+    MAIL_FROM: z.string().min(1).default('Fitadel <no-reply@fitadel.local>'),
+    /**
+     * The provider's public URL, mount path included: the `iss` claim every verifier
+     * checks, so it must match exactly what clients see (the gateway's URL behind one)
+     */
+    OIDC_ISSUER: z.url().default('http://localhost:8080/oidc'),
+    /**
+     * Proxies in front of the service (the gateway) whose X-Forwarded-For entry is
+     * trusted as the client's IP, for per-IP rate limits. 0 trusts no header: a client
+     * that reaches the service directly could otherwise pick its own IP.
+     */
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+    /**
+     * The audience of access tokens: the API that accepts them. Services reject tokens
+     * whose `aud` isn't this.
+     */
+    OIDC_API_AUDIENCE: z.url().default('https://api.fitadel.local'),
+    /**
+     * Signing keys as a JWK set. The first key signs; all are published, so a new key is
+     * added second, moved first once verifiers have cached it, and the old one removed
+     * after its last token expires. Generate with `nx run identity:generate-keys`.
+     */
+    OIDC_JWKS: json.pipe(
+      z.object({
+        keys: z
+          .array(signingKey)
+          .min(1)
+          .refine(
+            (keys) => new Set(keys.map((key) => key.kid)).size === keys.length,
+            'every kid must be unique',
+          ),
+      }),
+    ),
+    /**
+     * Comma-separated keys that sign the provider's cookies (session, sign-in in
+     * progress). The first signs; all verify, so they rotate like OIDC_JWKS.
+     */
+    OIDC_COOKIE_KEYS: z
+      .string()
+      .transform((value) => value.split(','))
+      .pipe(
+        z.array(z.string().min(32, 'each key needs at least 32 characters')),
+      ),
+    /**
+     * Sign-in with Google: an OAuth client of type "Web application" whose redirect URI
+     * is <issuer's origin>/interaction/google/callback. Without both, the button is
+     * hidden. The secret comes from Secrets Manager on AWS.
+     */
+    GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+    /** Google's issuer; tests point it at a fake */
+    GOOGLE_ISSUER: z.url().default('https://accounts.google.com'),
+  })
+  .refine(
+    (env) =>
+      (env.GOOGLE_CLIENT_ID === undefined) ===
+      (env.GOOGLE_CLIENT_SECRET === undefined),
+    {
+      message: 'set both GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, or neither',
+      path: ['GOOGLE_CLIENT_SECRET'],
+    },
+  );
 
 export type Env = z.infer<typeof envSchema>;
 

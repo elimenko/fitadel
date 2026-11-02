@@ -21,6 +21,7 @@ import {
   PasswordPolicy,
 } from '../account/password-policy';
 import { RegistrationService } from '../account/registration.service';
+import { FederationService } from '../federation/federation.service';
 import { OIDC_PROVIDER } from '../oidc/oidc.module';
 import {
   REGISTER_PER_EMAIL,
@@ -41,6 +42,7 @@ import {
   ForgotPasswordPage,
   RegisterPage,
   SignInPage,
+  type SignInPageProps,
 } from './pages';
 import { renderPage } from './render';
 
@@ -80,6 +82,7 @@ export class InteractionController {
     private readonly resets: PasswordResetService,
     private readonly passwords: PasswordPolicy,
     private readonly limiter: RateLimiter,
+    private readonly federation: FederationService,
   ) {}
 
   @Get(':uid')
@@ -89,7 +92,11 @@ export class InteractionController {
     const { uid, prompt } = details;
 
     if (prompt.name === 'login') {
-      return renderPage(res, 200, <SignInPage uid={uid} />);
+      return renderPage(
+        res,
+        200,
+        <SignInPage uid={uid} google={this.federation.googleEnabled} />,
+      );
     }
     if (prompt.name === 'consent') {
       return this.consent(req, res, details);
@@ -110,19 +117,27 @@ export class InteractionController {
     if (details.prompt.name !== 'login') {
       return renderPage(res, 400, <ErrorPage message={EXPIRED} />);
     }
+    // Back from Google to link an existing account: the page keeps saying so
+    const linkingGoogle = await this.federation.isLinkPending(uid);
+    const signInPage = (props: Omit<SignInPageProps, 'uid'>) => (
+      <SignInPage
+        uid={uid}
+        google={this.federation.googleEnabled}
+        linkingGoogle={linkingGoogle}
+        {...props}
+      />
+    );
 
     const form = signInForm.safeParse(body);
     if (!form.success) {
       return renderPage(
         res,
         400,
-        <SignInPage uid={uid} error="Enter your email and password." />,
+        signInPage({ error: 'Enter your email and password.' }),
       );
     }
     const { email, password } = form.data;
-    const again = (error: string) => (
-      <SignInPage uid={uid} email={email} error={error} />
-    );
+    const again = (error: string) => signInPage({ email, error });
 
     // Checked before the password: a blocked attempt costs no hash
     const byIp = await this.limiter.attempt(
@@ -153,11 +168,7 @@ export class InteractionController {
       return renderPage(
         res,
         400,
-        <SignInPage
-          uid={uid}
-          email={email}
-          error="That email and password don't match."
-        />,
+        again("That email and password don't match."),
       );
     }
     await byEmail.release();
@@ -182,6 +193,9 @@ export class InteractionController {
         <BreachedPasswordPage uid={uid} email={email} />,
       );
     }
+    // The password proved this account is theirs: connect the Google identity that
+    // brought them here (a no-op for an ordinary sign-in)
+    await this.federation.linkAfterSignIn(uid, accountId);
     await this.finish(req, res, { login: { accountId } });
   }
 
