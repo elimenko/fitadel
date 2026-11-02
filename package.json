@@ -51,7 +51,7 @@
     "@nx/web": "24.0.0",
     "@nx/webpack": "24.0.0",
     "@swc-node/register": "1.12.1",
-    "@swc/core": "1.16.18",
+    "@swc/core": "1.16.20",
     "@swc/helpers": "0.5.23",
     "@swc/jest": "~0.2.38",
     "@testcontainers/postgresql": "12.2.1",
