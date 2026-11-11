@@ -66,7 +66,7 @@ services:
   # Development-only API gateway (ADR-0009): one origin in front of the services, which
   # run on the host (nx serve), reached through host.docker.internal.
   gateway:
-    image: envoyproxy/envoy:v1.40.0@sha256:459f2a6404c340fe6afccd69d85527012d47f3c036765493e6f8f3113fa384de
+    image: envoyproxy/envoy:v1.40.2@sha256:8de97e654644827d62afdbf7e1d3dc9fee01a8690d410dd1c63a30dc6b6cecbb
     command: ['-c', '/etc/envoy/envoy.yaml']
     extra_hosts:
       - 'host.docker.internal:host-gateway' # Docker Desktop has it; Linux (CI) needs this
