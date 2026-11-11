@@ -42,12 +42,12 @@ jobs:
       - run: pnpm nx affected -t lint test typecheck build --output-style=static
 
       # The committed API description must match the code (no server or database needed)
-      - name: Check that openapi.json is up to date
+      - name: Check that each service's openapi.json is up to date
         run: |
-          pnpm nx run catalog:openapi --output-style=static
-          git diff --exit-code -- apps/services/catalog/openapi.json
+          pnpm nx run-many -t openapi --output-style=static
+          git diff --exit-code -- '**/openapi.json'
         env:
-          DATABASE_URL: postgresql://unused@localhost:5432/catalog
+          DATABASE_URL: postgresql://unused@localhost:5432/unused
           OTEL_SDK_DISABLED: 'true'
 
   integration:
