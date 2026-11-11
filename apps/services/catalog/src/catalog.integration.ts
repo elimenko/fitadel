@@ -20,6 +20,7 @@ import { gzipSync } from 'node:zlib';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { Client, Pool } from 'pg';
 import type { BarcodeLookupDto, Food, SearchResultDto } from './food/food.dto';
+import { routesOpenWithoutToken } from '@fitadel/shared-auth/testing';
 import { configureHttp, type ProblemDetails } from '@fitadel/shared-http';
 import { importOffDump } from './import/off-import';
 import { WHEY_BARCODE, wheyProtein } from './off/off-api-product.fixture';
@@ -404,24 +405,15 @@ describe('service', () => {
   });
 
   it('refuses requests without a token on every route except the public ones', async () => {
-    const routes = registeredRoutes(app);
-    const open: string[] = [];
-    for (const { method, path } of routes) {
-      // Guards run before validation, so any value reaches the token check
-      const url = path.replace(/:\w+/g, '0');
-      const response = await fetch(`${await app.getUrl()}${url}`, { method });
-      if (response.status !== 401) open.push(`${method} ${path}`);
-    }
     // Routes marked @Public(). A new one also needs an entry in the gateway's public
     // list (tools/gateway/envoy.yaml), or clients still get 401 there.
-    expect(open.sort()).toEqual([
+    expect(await routesOpenWithoutToken(app)).toEqual([
       'GET /health/live',
       'GET /health/ready',
       'GET /v1/foods',
       'GET /v1/foods/:id',
       'GET /v1/foods/barcode/:code',
     ]);
-    expect(routes.length).toBeGreaterThan(open.length);
   });
 
   // Uses the foods the import tests left behind: Twaróg (active), Boisson (retired)
@@ -926,24 +918,6 @@ describe('service', () => {
     });
   });
 });
-
-/** Every route Nest registered with Express, so a new endpoint is covered without listing it */
-function registeredRoutes(app: INestApplication) {
-  const express = app.getHttpAdapter().getInstance() as {
-    router: {
-      stack: { route?: { path: string; methods: Record<string, boolean> } }[];
-    };
-  };
-  return express.router.stack.flatMap(({ route }) =>
-    // Wildcard paths are middleware (request logging) mounted for every method
-    route && !route.path.includes('*')
-      ? Object.keys(route.methods).map((method) => ({
-          method: method.toUpperCase(),
-          path: route.path,
-        }))
-      : [],
-  );
-}
 
 /** A port that is free right now (the OS picks it). */
 async function freePort(): Promise<number> {
