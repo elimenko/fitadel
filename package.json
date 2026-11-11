@@ -25,7 +25,7 @@
     "jose": "6.2.14",
     "nestjs-pino": "5.3.1",
     "nestjs-zod": "5.5.0",
-    "nodemailer": "10.1.7",
+    "nodemailer": "10.3.1",
     "oidc-provider": "9.13.3",
     "openid-client": "6.8.8",
     "pg": "^8.23.1",
