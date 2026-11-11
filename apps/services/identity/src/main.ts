@@ -1,5 +1,5 @@
-// Must be the first import: see instrumentation.ts
-import { shutdownTelemetry } from './instrumentation';
+// Must be the first import: it instruments modules as they load
+import { shutdownTelemetry } from '@fitadel/shared-telemetry';
 
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';

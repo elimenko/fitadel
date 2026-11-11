@@ -26,5 +26,10 @@
     "eslint.config.mjs",
     "src/**/*.integration.ts",
     "jest.integration.config.cts"
+  ],
+  "references": [
+    {
+      "path": "../../../libs/shared/telemetry/tsconfig.lib.json"
+    }
   ]
 }

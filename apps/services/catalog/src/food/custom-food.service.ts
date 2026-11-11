@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { isContributor, type Viewer } from '../auth/viewer';
 import { Prisma } from '../generated/prisma/client';
-import { ProblemException } from '../http/problem-details.filter';
+import { ProblemException } from '@fitadel/shared-http';
 import { PrismaService } from '../prisma/prisma.service';
 import { toGtin14 } from './barcode';
 import type { Food, FoodInput } from './food.dto';

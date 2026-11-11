@@ -28,7 +28,13 @@
   ],
   "references": [
     {
+      "path": "../../../libs/shared/telemetry/tsconfig.lib.json"
+    },
+    {
       "path": "../../../libs/shared/nutrition/tsconfig.lib.json"
+    },
+    {
+      "path": "../../../libs/shared/http/tsconfig.lib.json"
     },
     {
       "path": "../../../libs/shared/auth/tsconfig.lib.json"

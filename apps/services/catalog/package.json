@@ -185,7 +185,9 @@
   },
   "dependencies": {
     "@fitadel/shared-auth": "workspace:*",
+    "@fitadel/shared-http": "workspace:*",
     "@fitadel/shared-nutrition": "workspace:*",
+    "@fitadel/shared-telemetry": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^12.0.1",
     "@nestjs/core": "^11.0.0",
