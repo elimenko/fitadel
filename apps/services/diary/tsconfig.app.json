@@ -21,6 +21,19 @@
     "src/**/*.test.ts",
     "eslint.config.js",
     "eslint.config.cjs",
-    "eslint.config.mjs"
+    "eslint.config.mjs",
+    "src/**/*.integration.ts",
+    "jest.integration.config.cts"
+  ],
+  "references": [
+    {
+      "path": "../../../libs/shared/telemetry/tsconfig.lib.json"
+    },
+    {
+      "path": "../../../libs/shared/http/tsconfig.lib.json"
+    },
+    {
+      "path": "../../../libs/shared/auth/tsconfig.lib.json"
+    }
   ]
 }

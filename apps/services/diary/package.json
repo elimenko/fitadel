@@ -77,7 +77,95 @@
       "test": {
         "options": {
           "passWithNoTests": true
+        },
+        "dependsOn": [
+          "prisma-generate",
+          "^build"
+        ]
+      },
+      "prisma-generate": {
+        "command": "prisma generate",
+        "options": {
+          "cwd": "{projectRoot}",
+          "env": {
+            "CHECKPOINT_DISABLE": "1"
+          }
+        },
+        "cache": true,
+        "inputs": [
+          "{projectRoot}/prisma/schema.prisma",
+          "{projectRoot}/prisma.config.ts",
+          {
+            "externalDependencies": [
+              "prisma"
+            ]
+          }
+        ],
+        "outputs": [
+          "{projectRoot}/src/generated/prisma"
+        ]
+      },
+      "prisma": {
+        "command": "prisma",
+        "options": {
+          "cwd": "{projectRoot}",
+          "env": {
+            "CHECKPOINT_DISABLE": "1"
+          },
+          "forwardAllArgs": true
         }
+      },
+      "build": {
+        "dependsOn": [
+          "prisma-generate",
+          "^build"
+        ]
+      },
+      "typecheck": {
+        "dependsOn": [
+          "prisma-generate",
+          "^typecheck"
+        ]
+      },
+      "lint": {
+        "dependsOn": [
+          "prisma-generate"
+        ]
+      },
+      "integration": {
+        "command": "jest --config jest.integration.config.cts",
+        "options": {
+          "cwd": "{projectRoot}",
+          "env": {
+            "NODE_OPTIONS": "--experimental-vm-modules"
+          }
+        },
+        "dependsOn": [
+          "prisma-generate",
+          "^build"
+        ],
+        "cache": true,
+        "inputs": [
+          "default",
+          "^production",
+          "{workspaceRoot}/tools/db/**",
+          "{workspaceRoot}/compose.yaml",
+          {
+            "externalDependencies": [
+              "@testcontainers/postgresql",
+              "prisma"
+            ]
+          }
+        ]
+      },
+      "openapi": {
+        "command": "node dist/main.js openapi openapi.json && prettier --write openapi.json",
+        "options": {
+          "cwd": "{projectRoot}"
+        },
+        "dependsOn": [
+          "build"
+        ]
       }
     },
     "tags": [
@@ -85,12 +173,34 @@
     ]
   },
   "dependencies": {
+    "@fitadel/shared-auth": "workspace:*",
+    "@fitadel/shared-http": "workspace:*",
+    "@fitadel/shared-telemetry": "workspace:*",
     "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^12.0.1",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/swagger": "11.4.7",
+    "@nestjs/terminus": "^12.1.0",
+    "@opentelemetry/api": "1.10.0",
+    "@opentelemetry/instrumentation-express": "0.72.0",
+    "@opentelemetry/instrumentation-http": "0.300.0",
+    "@opentelemetry/instrumentation-nestjs-core": "0.71.0",
+    "@opentelemetry/instrumentation-pg": "0.77.0",
+    "@opentelemetry/instrumentation-pino": "0.70.0",
+    "@opentelemetry/instrumentation-undici": "0.34.0",
+    "@opentelemetry/sdk-node": "0.300.0",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "nestjs-pino": "5.3.1",
+    "nestjs-zod": "5.5.0",
+    "pg": "^8.23.1",
+    "pino": "10.4.0",
+    "pino-http": "11.0.0",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.0.0"
