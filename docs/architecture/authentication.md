@@ -15,6 +15,7 @@ Fitadel's APIs.
 | --------------- | ----------------------------------------------------------------------------------------------------------- | --------------- |
 | `identity`      | OpenID Provider: accounts, login screens, authorization codes, tokens, JWKS                                 | Phase 2, Step 2 |
 | `catalog`       | Resource server: verifies access tokens, maps claims to a `Viewer`, applies ownership and contributor rules | Phase 2, Step 3 |
+| `diary`         | Resource server: every route needs a token; a user sees only their own goals and entries                    | Phase 3, Step 2 |
 | Gateway (Envoy) | Edge: routing, coarse token verification, rate limiting                                                     | Phase 2, Step 4 |
 | Google          | External identity provider, federated by `identity`                                                         | Phase 2, Step 5 |
 
@@ -66,7 +67,7 @@ Clients reach everything through one origin, the Envoy gateway
 | ------------------------------------------------------------- | --------------------- | ---------------------------- |
 | `/oidc/`, `/interaction/`, `/verify-email`, `/reset-password` | `identity`            | none (sign-in happens here)  |
 | `GET /api/catalog/v1/foods` and below                         | `catalog`, as `/v1/…` | optional, verified when sent |
-| anything else under `/api/`                                   | the service           | required                     |
+| anything else under `/api/` (all of `/api/diary/`)            | the service           | required                     |
 | anything else (health checks included)                        | nothing: `404`        | —                            |
 
 - **Default-deny.** A public endpoint needs `@Public()` in the service and an entry in

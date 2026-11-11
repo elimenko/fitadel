@@ -84,6 +84,9 @@ static_resources:
                         # APIs: /api/catalog/v1/foods reaches the catalog as /v1/foods
                         - match: { prefix: /api/catalog/ }
                           route: { cluster: catalog, prefix_rewrite: / }
+                        # Diary: no public routes, so the token rule below covers all of it
+                        - match: { prefix: /api/diary/ }
+                          route: { cluster: diary, prefix_rewrite: / }
                         # Everything else, health checks included, isn't public
                         - match: { prefix: / }
                           direct_response: { status: 404 }
@@ -159,3 +162,14 @@ static_resources:
                   address:
                     socket_address:
                       { address: host.docker.internal, port_value: 3000 }
+    - name: diary
+      type: STRICT_DNS
+      dns_lookup_family: V4_PREFERRED
+      load_assignment:
+        cluster_name: diary
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      { address: host.docker.internal, port_value: 3020 }
