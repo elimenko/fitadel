@@ -17,6 +17,9 @@
     },
     {
       "path": "./libs/shared/auth"
+    },
+    {
+      "path": "./apps/services/diary"
     }
   ],
   "compilerOptions": {}
