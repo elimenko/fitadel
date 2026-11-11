@@ -1,0 +1,54 @@
+-- Provisions the diary service's database and roles. Idempotent: safe to re-run.
+-- Run through diary.sh, which passes the passwords as psql variables.
+--
+--   diary_migrator  owns the database and every object in it; runs migrations
+--   diary_app       reads and writes rows only; used by the running service
+--   diary_reader    reads rows only; for people inspecting data (SQL clients)
+--
+-- diary_reader sees every table by default, like the catalog: the diary holds no secrets.
+-- Diaries are personal (possibly health) data, though: in production, people get no
+-- standing access (Phase 8).
+
+-- Postgres has no CREATE ROLE IF NOT EXISTS: build the statement, then \gexec runs it
+SELECT format('CREATE ROLE diary_migrator LOGIN PASSWORD %L', :'migrator_password')
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'diary_migrator') \gexec
+SELECT format('CREATE ROLE diary_app LOGIN PASSWORD %L', :'app_password')
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'diary_app') \gexec
+SELECT format('CREATE ROLE diary_reader LOGIN PASSWORD %L', :'reader_password')
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'diary_reader') \gexec
+
+-- Keep passwords in sync with .env on re-runs
+ALTER ROLE diary_migrator PASSWORD :'migrator_password';
+ALTER ROLE diary_app PASSWORD :'app_password';
+ALTER ROLE diary_reader PASSWORD :'reader_password';
+
+-- Local only: prisma migrate dev creates a temporary shadow database
+ALTER ROLE diary_migrator CREATEDB;
+
+-- A second safety layer for people: their sessions start read-only
+ALTER ROLE diary_reader SET default_transaction_read_only = on;
+
+-- CREATE DATABASE can't run in a transaction block (or a DO block), hence \gexec again
+SELECT 'CREATE DATABASE diary OWNER diary_migrator'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'diary') \gexec
+
+REVOKE ALL ON DATABASE diary FROM PUBLIC;
+GRANT CONNECT ON DATABASE diary TO diary_app, diary_reader;
+
+\connect diary
+
+-- The database owner (diary_migrator) owns schema public; nobody else may create in it
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO diary_app, diary_reader;
+
+-- Grants on objects that diary_migrator creates later, in future migrations
+ALTER DEFAULT PRIVILEGES FOR ROLE diary_migrator IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO diary_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE diary_migrator IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO diary_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE diary_migrator IN SCHEMA public
+  GRANT SELECT ON TABLES TO diary_reader;
+
+-- Default privileges only cover future tables. Tables that already exist (when a role
+-- is added after the first migrations) need a one-time grant.
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO diary_reader;

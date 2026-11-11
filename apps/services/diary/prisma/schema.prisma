@@ -1,0 +1,12 @@
+// Diary data model: goals (daily calorie budget and macro targets) and diary entries.
+// Tables arrive with the first features (Phase 3, Steps 3 and 4).
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
