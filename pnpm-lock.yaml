@@ -431,9 +431,15 @@ importers:
       '@fitadel/shared-auth':
         specifier: workspace:*
         version: link:../../../libs/shared/auth
+      '@fitadel/shared-http':
+        specifier: workspace:*
+        version: link:../../../libs/shared/http
       '@fitadel/shared-nutrition':
         specifier: workspace:*
         version: link:../../../libs/shared/nutrition
+      '@fitadel/shared-telemetry':
+        specifier: workspace:*
+        version: link:../../../libs/shared/telemetry
       '@nestjs/common':
         specifier: ^11.0.0
         version: 11.2.8(reflect-metadata@0.2.2)(rxjs@7.8.1)(supports-color@7.2.0)
@@ -544,6 +550,9 @@ importers:
 
   apps/services/identity:
     dependencies:
+      '@fitadel/shared-telemetry':
+        specifier: workspace:*
+        version: link:../../../libs/shared/telemetry
       '@nestjs/common':
         specifier: ^11.0.0
         version: 11.2.8(reflect-metadata@0.2.2)(rxjs@7.8.1)(supports-color@7.2.0)
@@ -635,7 +644,11 @@ importers:
 
   libs/shared/auth: {}
 
+  libs/shared/http: {}
+
   libs/shared/nutrition: {}
+
+  libs/shared/telemetry: {}
 
   tools/fitadel-dev:
     dependencies:

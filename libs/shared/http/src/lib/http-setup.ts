@@ -15,13 +15,23 @@ export function configureHttp(app: INestApplication): void {
   app.enableVersioning({ type: VersioningType.URI });
 }
 
+/** What a service says about its API in the OpenAPI document */
+export interface ApiInfo {
+  title: string;
+  /** Followed by a sentence about the error format */
+  description: string;
+}
+
 /** The OpenAPI description, generated from the controllers and their zod schemas */
-export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
+export function createOpenApiDocument(
+  app: INestApplication,
+  info: ApiInfo,
+): OpenAPIObject {
   const config = new DocumentBuilder()
-    .setTitle('Fitadel catalog API')
+    .setTitle(info.title)
     .setDescription(
-      'Foods with nutrition values, barcode lookup and search. Errors use RFC 9457 ' +
-        'problem details (application/problem+json).',
+      `${info.description} Errors use RFC 9457 problem details ` +
+        '(application/problem+json).',
     )
     .setVersion('1')
     // Access tokens from the identity service (Authorization: Bearer <token>)
@@ -33,8 +43,8 @@ export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
 }
 
 /** Swagger UI at /docs and the raw document at /docs/openapi.json */
-export function serveApiDocs(app: INestApplication): void {
-  SwaggerModule.setup('docs', app, createOpenApiDocument(app), {
+export function serveApiDocs(app: INestApplication, info: ApiInfo): void {
+  SwaggerModule.setup('docs', app, createOpenApiDocument(app, info), {
     jsonDocumentUrl: 'docs/openapi.json',
   });
 }

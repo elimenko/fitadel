@@ -20,7 +20,7 @@ import { gzipSync } from 'node:zlib';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { Client, Pool } from 'pg';
 import type { BarcodeLookupDto, Food, SearchResultDto } from './food/food.dto';
-import type { ProblemDetails } from './http/problem-details.filter';
+import { configureHttp, type ProblemDetails } from '@fitadel/shared-http';
 import { importOffDump } from './import/off-import';
 import { WHEY_BARCODE, wheyProtein } from './off/off-api-product.fixture';
 
@@ -371,7 +371,6 @@ describe('service', () => {
       imports: [AppModule],
     }).compile();
     app = moduleRef.createNestApplication();
-    const { configureHttp } = await import('./http/http-setup.js');
     configureHttp(app);
     await app.listen(0);
   });

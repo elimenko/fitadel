@@ -6,11 +6,11 @@ import {
   AccessTokenVerifier,
   remoteKeys,
 } from '@fitadel/shared-auth';
+import { ProblemDetailsFilter } from '@fitadel/shared-http';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env';
 import { FoodModule } from '../food/food.module';
 import { HealthModule } from '../health/health.module';
-import { ProblemDetailsFilter } from '../http/problem-details.filter';
 import { coreModules } from './core';
 
 @Module({

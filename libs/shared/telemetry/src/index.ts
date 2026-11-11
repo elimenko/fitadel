@@ -1,10 +1,11 @@
 /**
  * OpenTelemetry setup. It must run before any instrumented module (http, express, pg,
  * pino) is loaded, because auto-instrumentation patches modules when they are first
- * require()d. main.ts imports this file first.
+ * require()d. Each service imports this package first in its main.ts.
  *
  * Exporters, endpoint and service name come from the standard OTEL_* environment
- * variables (see .env.example), so the backend can change without code changes.
+ * variables (see each service's .env.example), so the backend can change without code
+ * changes.
  */
 import {
   ExpressInstrumentation,
@@ -43,7 +44,7 @@ export const telemetry = new NodeSDK({
     // Adds trace_id/span_id to log lines and sends logs over OTLP
     new PinoInstrumentation(),
     // fetch() is built on undici, which the http instrumentation doesn't see
-    // (outgoing calls, e.g. to Google for sign-in with Google)
+    // (e.g. the Open Food Facts API, Google sign-in)
     new UndiciInstrumentation(),
   ],
 });

@@ -1,5 +1,5 @@
-// Must be the first import: see instrumentation.ts
-import { shutdownTelemetry } from './instrumentation';
+// Must be the first import: it instruments modules as they load
+import { shutdownTelemetry } from '@fitadel/shared-telemetry';
 
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
@@ -8,11 +8,17 @@ import { writeFileSync } from 'node:fs';
 import { AppModule } from './app/app.module';
 import type { Env } from './config/env';
 import {
+  type ApiInfo,
   configureHttp,
   createOpenApiDocument,
   serveApiDocs,
-} from './http/http-setup';
+} from '@fitadel/shared-http';
 import { importOffCommand } from './import/import-command';
+
+const apiInfo: ApiInfo = {
+  title: 'Fitadel catalog API',
+  description: 'Foods with nutrition values, barcode lookup and search.',
+};
 
 async function bootstrap() {
   // Buffer Nest's startup logs until the pino logger is ready
@@ -24,7 +30,7 @@ async function bootstrap() {
   const config = app.get<ConfigService<Env, true>>(ConfigService);
   // Interactive API docs for development; not exposed in production
   if (config.get('NODE_ENV', { infer: true }) !== 'production') {
-    serveApiDocs(app);
+    serveApiDocs(app, apiInfo);
   }
 
   // SIGTERM (Kubernetes, docker stop) or SIGINT (Ctrl+C): stop accepting requests,
@@ -71,7 +77,7 @@ async function openApiCommand([file]: string[]): Promise<number> {
   configureHttp(app);
   writeFileSync(
     file,
-    JSON.stringify(createOpenApiDocument(app), null, 2) + '\n',
+    JSON.stringify(createOpenApiDocument(app, apiInfo), null, 2) + '\n',
   );
   await app.close();
   return 0;

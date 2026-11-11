@@ -169,6 +169,7 @@
     ]
   },
   "dependencies": {
+    "@fitadel/shared-telemetry": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^12.0.1",
     "@nestjs/core": "^11.0.0",
