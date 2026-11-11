@@ -27,7 +27,7 @@
     "nestjs-zod": "5.5.0",
     "nodemailer": "10.1.7",
     "oidc-provider": "9.13.3",
-    "openid-client": "6.8.8",
+    "openid-client": "6.8.9",
     "pg": "^8.23.1",
     "pg-copy-streams": "7.0.0",
     "pino": "10.4.0",
