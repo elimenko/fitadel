@@ -23,6 +23,7 @@ import {
   routesOpenWithoutToken,
 } from '@fitadel/shared-auth/testing';
 import { configureHttp, type ProblemDetails } from '@fitadel/shared-http';
+import type { Day, Entry } from './day/day.dto';
 import type { Goal } from './goal/goal.dto';
 
 const workspaceRoot = join(__dirname, '../../../..');
@@ -397,6 +398,215 @@ describe('service', () => {
       const goal = (await response.json()) as Goal;
       expect(goal.adjustment).toEqual({ unit: 'kcal', value: 0 });
       expect(goal.targets.kcal).toBe(2600);
+    });
+  });
+
+  describe('diary', () => {
+    const zeros = { kcal: 0, proteinG: 0, fatG: 0, carbsG: 0, fiberG: 0 };
+
+    let user: string;
+    beforeEach(() => {
+      user = randomUUID();
+    });
+
+    const day = async (date: string, asUser = user) =>
+      (await (await api(asUser, 'GET', `/v1/days/${date}`)).json()) as Day;
+
+    const logEntry = async (date: string, entry: Record<string, unknown>) => {
+      const response = await api(
+        user,
+        'POST',
+        `/v1/days/${date}/entries`,
+        entry,
+      );
+      expect(response.status).toBe(201);
+      return (await response.json()) as Entry;
+    };
+
+    const breakfast = {
+      meal: 'breakfast',
+      name: 'Oatmeal',
+      kcal: 400,
+      proteinG: 20,
+      fatG: 10,
+      carbsG: 55,
+      fiberG: 8,
+    };
+
+    it('shows an empty day without a goal', async () => {
+      const empty = { entries: [], totals: zeros };
+      expect(await day('2026-11-15')).toEqual({
+        date: '2026-11-15',
+        meals: { breakfast: empty, lunch: empty, dinner: empty, snack: empty },
+        totals: zeros,
+        targets: null,
+        remaining: null,
+        incomplete: [],
+      });
+    });
+
+    it('sums the day by meal against the goal in effect', async () => {
+      await api(user, 'PUT', '/v1/goals/2026-11-01', {
+        maintenanceKcal: 2500,
+        adjustment: { unit: 'kcal', value: -500 },
+        proteinG: 150,
+        fatG: 60,
+        fiberG: 30,
+      });
+      const oatmeal = await logEntry('2026-11-15', breakfast);
+      const coffee = await logEntry('2026-11-15', {
+        meal: 'breakfast',
+        kcal: 60,
+      });
+      await logEntry('2026-11-15', {
+        meal: 'lunch',
+        name: 'Canteen lunch',
+        kcal: 750.5,
+        proteinG: 35,
+      });
+
+      const result = await day('2026-11-15');
+      expect(result.meals.breakfast.entries.map((entry) => entry.id)).toEqual([
+        oatmeal.id,
+        coffee.id,
+      ]);
+      expect(result.meals.breakfast.totals.kcal).toBe(460);
+      expect(result.meals.dinner.entries).toEqual([]);
+      expect(result.totals).toEqual({
+        kcal: 1210.5,
+        proteinG: 55,
+        fatG: 10,
+        carbsG: 55,
+        fiberG: 8,
+      });
+      // 2000 kcal; carbs (2000 - 600 - 540) / 4 = 215
+      expect(result.targets).toEqual({
+        kcal: 2000,
+        proteinG: 150,
+        fatG: 60,
+        carbsG: 215,
+        fiberG: 30,
+      });
+      expect(result.remaining).toEqual({
+        kcal: 789.5,
+        proteinG: 95,
+        fatG: 50,
+        carbsG: 160,
+        fiberG: 22,
+      });
+      expect(result.incomplete).toEqual([
+        'proteinG',
+        'fatG',
+        'carbsG',
+        'fiberG',
+      ]);
+    });
+
+    it('goes negative when over the budget', async () => {
+      await api(user, 'PUT', '/v1/goals/2026-11-01', {
+        maintenanceKcal: 2000,
+        proteinG: 100,
+        fatG: 50,
+        fiberG: 25,
+      });
+      await logEntry('2026-11-15', { meal: 'dinner', kcal: 2300 });
+      expect((await day('2026-11-15')).remaining?.kcal).toBe(-300);
+    });
+
+    it('logs a quick entry with only calories', async () => {
+      const response = await api(user, 'POST', '/v1/days/2026-11-15/entries', {
+        meal: 'snack',
+        kcal: 150,
+      });
+      const entry = (await response.json()) as Entry;
+      expect(response.headers.get('location')).toBe(`/v1/entries/${entry.id}`);
+      expect(entry).toEqual({
+        id: expect.any(String),
+        date: '2026-11-15',
+        meal: 'snack',
+        name: null,
+        kcal: 150,
+        proteinG: null,
+        fatG: null,
+        carbsG: null,
+        fiberG: null,
+      });
+      expect(
+        await (await api(user, 'GET', `/v1/entries/${entry.id}`)).json(),
+      ).toEqual(entry);
+    });
+
+    it('stores values to one decimal', async () => {
+      const entry = await logEntry('2026-11-15', {
+        meal: 'snack',
+        kcal: 100.26,
+        proteinG: 3.14,
+      });
+      expect(entry.kcal).toBe(100.3);
+      expect(entry.proteinG).toBe(3.1);
+    });
+
+    it('moves an entry to another day and meal', async () => {
+      const entry = await logEntry('2026-11-15', breakfast);
+      const response = await api(user, 'PUT', `/v1/entries/${entry.id}`, {
+        ...breakfast,
+        date: '2026-11-16',
+        meal: 'dinner',
+        kcal: 450,
+      });
+      expect(response.status).toBe(200);
+      expect((await day('2026-11-15')).totals.kcal).toBe(0);
+      const moved = (await day('2026-11-16')).meals.dinner.entries;
+      expect(moved).toEqual([
+        { ...entry, date: '2026-11-16', meal: 'dinner', kcal: 450 },
+      ]);
+    });
+
+    it('deletes an entry', async () => {
+      const entry = await logEntry('2026-11-15', breakfast);
+      expect(
+        (await api(user, 'DELETE', `/v1/entries/${entry.id}`)).status,
+      ).toBe(204);
+      expect(
+        (await api(user, 'DELETE', `/v1/entries/${entry.id}`)).status,
+      ).toBe(404);
+      expect((await day('2026-11-15')).totals.kcal).toBe(0);
+    });
+
+    it("never shows or changes another user's entries", async () => {
+      const entry = await logEntry('2026-11-15', breakfast);
+      const other = randomUUID();
+      expect((await day('2026-11-15', other)).totals.kcal).toBe(0);
+      expect((await api(other, 'GET', `/v1/entries/${entry.id}`)).status).toBe(
+        404,
+      );
+      expect(
+        (
+          await api(other, 'PUT', `/v1/entries/${entry.id}`, {
+            ...breakfast,
+            date: '2026-11-15',
+          })
+        ).status,
+      ).toBe(404);
+      expect(
+        (await api(other, 'DELETE', `/v1/entries/${entry.id}`)).status,
+      ).toBe(404);
+      expect((await day('2026-11-15')).totals.kcal).toBe(400);
+    });
+
+    it('rejects invalid entries', async () => {
+      const post = (entry: unknown) =>
+        api(user, 'POST', '/v1/days/2026-11-15/entries', entry);
+      expect((await post({ meal: 'snack' })).status).toBe(400);
+      expect((await post({ meal: 'brunch', kcal: 100 })).status).toBe(400);
+      expect((await post({ meal: 'snack', kcal: -1 })).status).toBe(400);
+      expect(
+        (await api(user, 'POST', '/v1/days/2026-13-01/entries', breakfast))
+          .status,
+      ).toBe(400);
+      expect((await api(user, 'GET', '/v1/entries/not-an-id')).status).toBe(
+        400,
+      );
     });
   });
 });
