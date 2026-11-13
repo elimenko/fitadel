@@ -7,5 +7,7 @@ import { GoalService } from './goal.service';
   imports: [PrismaModule],
   controllers: [GoalController],
   providers: [GoalService],
+  // The day view measures entries against the goal in effect
+  exports: [GoalService],
 })
 export class GoalModule {}

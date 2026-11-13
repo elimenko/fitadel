@@ -6,7 +6,8 @@ view needs both ([ADR-0010](../../../docs/adr/0010-goals-and-diary-in-one-servic
 Built with NestJS and Prisma on PostgreSQL, like the catalog.
 
 The features arrive in Phase 3 ([roadmap](../../../docs/roadmap.md)); so far the service
-has goals, plus its database, health checks and access-token checks.
+has goals and manual diary entries, plus its database, health checks and access-token
+checks.
 
 ## Goals
 
@@ -38,6 +39,26 @@ alone exceed the budget are rejected with `422`.
 
 Dates are calendar dates (`YYYY-MM-DD`) chosen by the client, which knows the user's
 "today". The service never converts them to or from a time zone.
+
+## Diary
+
+An entry is something the user ate on a day, in one of four meals (breakfast, lunch,
+dinner, snack). It stores its values for the whole entry, copied in when it is logged,
+so later changes elsewhere never rewrite the diary. A manual entry needs only `kcal`;
+its name and macros are optional, and an unknown macro is `null`, not `0`.
+
+| Route                          | Does                                                    |
+| ------------------------------ | ------------------------------------------------------- |
+| `GET /v1/days/{date}`          | the day: entries by meal, totals, targets and remaining |
+| `POST /v1/days/{date}/entries` | log a manual entry                                      |
+| `GET /v1/entries/{id}`         | one entry                                               |
+| `PUT /v1/entries/{id}`         | replace it; a new `date` or `meal` moves it             |
+| `DELETE /v1/entries/{id}`      | delete it                                               |
+
+The day view adds up the day's entries when it is read. `remaining` is the targets of
+the goal in effect minus the totals, negative when over, and `null` without a goal.
+Unknown macros count as nothing, and `incomplete` names them, so the app can show
+"at least 120 g" instead of an exact number.
 
 ## Running it
 

@@ -681,6 +681,322 @@
         ],
         "tags": ["goals"]
       }
+    },
+    "/v1/days/{date}": {
+      "get": {
+        "operationId": "DayController_day_v1",
+        "parameters": [
+          {
+            "name": "date",
+            "required": true,
+            "in": "path",
+            "description": "A calendar date, YYYY-MM-DD",
+            "schema": {
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayDto_Output"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a valid date",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No access token, or an invalid or expired one",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["diary"]
+      }
+    },
+    "/v1/days/{date}/entries": {
+      "post": {
+        "operationId": "DayController_create_v1",
+        "parameters": [
+          {
+            "name": "date",
+            "required": true,
+            "in": "path",
+            "description": "A calendar date, YYYY-MM-DD",
+            "schema": {
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEntryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created; the Location header points to it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntryDto_Output"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields or date",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No access token, or an invalid or expired one",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["diary"]
+      }
+    },
+    "/v1/entries/{id}": {
+      "get": {
+        "operationId": "EntryController_get_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntryDto_Output"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a valid id",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No access token, or an invalid or expired one",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such entry in your diary",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["diary"]
+      },
+      "put": {
+        "operationId": "EntryController_replace_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceEntryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replaced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntryDto_Output"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields or date",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No access token, or an invalid or expired one",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such entry in your diary",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["diary"]
+      },
+      "delete": {
+        "operationId": "EntryController_delete_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "400": {
+            "description": "Not a valid id",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No access token, or an invalid or expired one",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such entry in your diary",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["diary"]
+      }
     }
   },
   "info": {
@@ -1002,6 +1318,748 @@
           }
         },
         "required": ["maintenanceKcal", "proteinG", "fatG", "fiberG"]
+      },
+      "DayDto_Output": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+            "description": "A calendar date, YYYY-MM-DD"
+          },
+          "meals": {
+            "type": "object",
+            "properties": {
+              "breakfast": {
+                "type": "object",
+                "properties": {
+                  "entries": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "date": {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                          "description": "A calendar date, YYYY-MM-DD"
+                        },
+                        "meal": {
+                          "type": "string",
+                          "enum": ["breakfast", "lunch", "dinner", "snack"]
+                        },
+                        "name": {
+                          "type": ["string", "null"]
+                        },
+                        "kcal": {
+                          "type": "number"
+                        },
+                        "proteinG": {
+                          "description": "Grams; null when unknown (not 0)",
+                          "type": ["number", "null"]
+                        },
+                        "fatG": {
+                          "description": "Grams; null when unknown (not 0)",
+                          "type": ["number", "null"]
+                        },
+                        "carbsG": {
+                          "description": "Grams; null when unknown (not 0)",
+                          "type": ["number", "null"]
+                        },
+                        "fiberG": {
+                          "description": "Grams; null when unknown (not 0)",
+                          "type": ["number", "null"]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "date",
+                        "meal",
+                        "name",
+                        "kcal",
+                        "proteinG",
+                        "fatG",
+                        "carbsG",
+                        "fiberG"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Something the user ate, with values for the whole entry"
+                    },
+                    "description": "In the order they were logged"
+                  },
+                  "totals": {
+                    "type": "object",
+                    "properties": {
+                      "kcal": {
+                        "type": "number"
+                      },
+                      "proteinG": {
+                        "type": "number"
+                      },
+                      "fatG": {
+                        "type": "number"
+                      },
+                      "carbsG": {
+                        "type": "number"
+                      },
+                      "fiberG": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "kcal",
+                      "proteinG",
+                      "fatG",
+                      "carbsG",
+                      "fiberG"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["entries", "totals"],
+                "additionalProperties": false
+              },
+              "lunch": {
+                "type": "object",
+                "properties": {
+                  "entries": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "date": {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                          "description": "A calendar date, YYYY-MM-DD"
+                        },
+                        "meal": {
+                          "type": "string",
+                          "enum": ["breakfast", "lunch", "dinner", "snack"]
+                        },
+                        "name": {
+                          "type": ["string", "null"]
+                        },
+                        "kcal": {
+                          "type": "number"
+                        },
+                        "proteinG": {
+                          "description": "Grams; null when unknown (not 0)",
+                          "type": ["number", "null"]
+                        },
+                        "fatG": {
+                          "description": "Grams; null when unknown (not 0)",
+                          "type": ["number", "null"]
+                        },
+                        "carbsG": {
+                          "description": "Grams; null when unknown (not 0)",
+                          "type": ["number", "null"]
+                        },
+                        "fiberG": {
+                          "description": "Grams; null when unknown (not 0)",
+                          "type": ["number", "null"]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "date",
+                        "meal",
+                        "name",
+                        "kcal",
+                        "proteinG",
+                        "fatG",
+                        "carbsG",
+                        "fiberG"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Something the user ate, with values for the whole entry"
+                    },
+                    "description": "In the order they were logged"
+                  },
+                  "totals": {
+                    "type": "object",
+                    "properties": {
+                      "kcal": {
+                        "type": "number"
+                      },
+                      "proteinG": {
+                        "type": "number"
+                      },
+                      "fatG": {
+                        "type": "number"
+                      },
+                      "carbsG": {
+                        "type": "number"
+                      },
+                      "fiberG": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "kcal",
+                      "proteinG",
+                      "fatG",
+                      "carbsG",
+                      "fiberG"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["entries", "totals"],
+                "additionalProperties": false
+              },
+              "dinner": {
+                "type": "object",
+                "properties": {
+                  "entries": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "date": {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                          "description": "A calendar date, YYYY-MM-DD"
+                        },
+                        "meal": {
+                          "type": "string",
+                          "enum": ["breakfast", "lunch", "dinner", "snack"]
+                        },
+                        "name": {
+                          "type": ["string", "null"]
+                        },
+                        "kcal": {
+                          "type": "number"
+                        },
+                        "proteinG": {
+                          "description": "Grams; null when unknown (not 0)",
+                          "type": ["number", "null"]
+                        },
+                        "fatG": {
+                          "description": "Grams; null when unknown (not 0)",
+                          "type": ["number", "null"]
+                        },
+                        "carbsG": {
+                          "description": "Grams; null when unknown (not 0)",
+                          "type": ["number", "null"]
+                        },
+                        "fiberG": {
+                          "description": "Grams; null when unknown (not 0)",
+                          "type": ["number", "null"]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "date",
+                        "meal",
+                        "name",
+                        "kcal",
+                        "proteinG",
+                        "fatG",
+                        "carbsG",
+                        "fiberG"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Something the user ate, with values for the whole entry"
+                    },
+                    "description": "In the order they were logged"
+                  },
+                  "totals": {
+                    "type": "object",
+                    "properties": {
+                      "kcal": {
+                        "type": "number"
+                      },
+                      "proteinG": {
+                        "type": "number"
+                      },
+                      "fatG": {
+                        "type": "number"
+                      },
+                      "carbsG": {
+                        "type": "number"
+                      },
+                      "fiberG": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "kcal",
+                      "proteinG",
+                      "fatG",
+                      "carbsG",
+                      "fiberG"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["entries", "totals"],
+                "additionalProperties": false
+              },
+              "snack": {
+                "type": "object",
+                "properties": {
+                  "entries": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "date": {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                          "description": "A calendar date, YYYY-MM-DD"
+                        },
+                        "meal": {
+                          "type": "string",
+                          "enum": ["breakfast", "lunch", "dinner", "snack"]
+                        },
+                        "name": {
+                          "type": ["string", "null"]
+                        },
+                        "kcal": {
+                          "type": "number"
+                        },
+                        "proteinG": {
+                          "description": "Grams; null when unknown (not 0)",
+                          "type": ["number", "null"]
+                        },
+                        "fatG": {
+                          "description": "Grams; null when unknown (not 0)",
+                          "type": ["number", "null"]
+                        },
+                        "carbsG": {
+                          "description": "Grams; null when unknown (not 0)",
+                          "type": ["number", "null"]
+                        },
+                        "fiberG": {
+                          "description": "Grams; null when unknown (not 0)",
+                          "type": ["number", "null"]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "date",
+                        "meal",
+                        "name",
+                        "kcal",
+                        "proteinG",
+                        "fatG",
+                        "carbsG",
+                        "fiberG"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Something the user ate, with values for the whole entry"
+                    },
+                    "description": "In the order they were logged"
+                  },
+                  "totals": {
+                    "type": "object",
+                    "properties": {
+                      "kcal": {
+                        "type": "number"
+                      },
+                      "proteinG": {
+                        "type": "number"
+                      },
+                      "fatG": {
+                        "type": "number"
+                      },
+                      "carbsG": {
+                        "type": "number"
+                      },
+                      "fiberG": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "kcal",
+                      "proteinG",
+                      "fatG",
+                      "carbsG",
+                      "fiberG"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["entries", "totals"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["breakfast", "lunch", "dinner", "snack"],
+            "additionalProperties": false
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "kcal": {
+                "type": "number"
+              },
+              "proteinG": {
+                "type": "number"
+              },
+              "fatG": {
+                "type": "number"
+              },
+              "carbsG": {
+                "type": "number"
+              },
+              "fiberG": {
+                "type": "number"
+              }
+            },
+            "required": ["kcal", "proteinG", "fatG", "carbsG", "fiberG"],
+            "additionalProperties": false,
+            "description": "Unknown macros count as nothing"
+          },
+          "targets": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kcal": {
+                    "type": "number"
+                  },
+                  "proteinG": {
+                    "type": "number"
+                  },
+                  "fatG": {
+                    "type": "number"
+                  },
+                  "carbsG": {
+                    "type": "number"
+                  },
+                  "fiberG": {
+                    "type": "number"
+                  }
+                },
+                "required": ["kcal", "proteinG", "fatG", "carbsG", "fiberG"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "From the goal in effect on this day; null without a goal"
+          },
+          "remaining": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kcal": {
+                    "type": "number"
+                  },
+                  "proteinG": {
+                    "type": "number"
+                  },
+                  "fatG": {
+                    "type": "number"
+                  },
+                  "carbsG": {
+                    "type": "number"
+                  },
+                  "fiberG": {
+                    "type": "number"
+                  }
+                },
+                "required": ["kcal", "proteinG", "fatG", "carbsG", "fiberG"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Targets minus totals, negative when over; null without a goal"
+          },
+          "incomplete": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["proteinG", "fatG", "carbsG", "fiberG"]
+            },
+            "description": "Macros that some entry does not know: their totals are a lower bound"
+          }
+        },
+        "required": [
+          "date",
+          "meals",
+          "totals",
+          "targets",
+          "remaining",
+          "incomplete"
+        ],
+        "description": "A day's entries by meal, against the goal's targets",
+        "additionalProperties": false
+      },
+      "CreateEntryDto": {
+        "type": "object",
+        "properties": {
+          "meal": {
+            "type": "string",
+            "enum": ["breakfast", "lunch", "dinner", "snack"]
+          },
+          "name": {
+            "default": null,
+            "description": "e.g. \"Lunch at work\"; optional",
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kcal": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "proteinG": {
+            "default": null,
+            "description": "Grams for the whole entry; null or omitted when unknown",
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fatG": {
+            "default": null,
+            "description": "Grams for the whole entry; null or omitted when unknown",
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "carbsG": {
+            "default": null,
+            "description": "Grams for the whole entry; null or omitted when unknown",
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fiberG": {
+            "default": null,
+            "description": "Grams for the whole entry; null or omitted when unknown",
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["meal", "kcal"],
+        "description": "Values are stored to one decimal"
+      },
+      "EntryDto_Output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+            "description": "A calendar date, YYYY-MM-DD"
+          },
+          "meal": {
+            "type": "string",
+            "enum": ["breakfast", "lunch", "dinner", "snack"]
+          },
+          "name": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "kcal": {
+            "type": "number"
+          },
+          "proteinG": {
+            "description": "Grams; null when unknown (not 0)",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "fatG": {
+            "description": "Grams; null when unknown (not 0)",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "carbsG": {
+            "description": "Grams; null when unknown (not 0)",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "fiberG": {
+            "description": "Grams; null when unknown (not 0)",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "meal",
+          "name",
+          "kcal",
+          "proteinG",
+          "fatG",
+          "carbsG",
+          "fiberG"
+        ],
+        "description": "Something the user ate, with values for the whole entry",
+        "additionalProperties": false
+      },
+      "ReplaceEntryDto": {
+        "type": "object",
+        "properties": {
+          "meal": {
+            "type": "string",
+            "enum": ["breakfast", "lunch", "dinner", "snack"]
+          },
+          "name": {
+            "default": null,
+            "description": "e.g. \"Lunch at work\"; optional",
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kcal": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "proteinG": {
+            "default": null,
+            "description": "Grams for the whole entry; null or omitted when unknown",
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fatG": {
+            "default": null,
+            "description": "Grams for the whole entry; null or omitted when unknown",
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "carbsG": {
+            "default": null,
+            "description": "Grams for the whole entry; null or omitted when unknown",
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fiberG": {
+            "default": null,
+            "description": "Grams for the whole entry; null or omitted when unknown",
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+            "description": "A calendar date, YYYY-MM-DD"
+          }
+        },
+        "required": ["meal", "kcal", "date"]
       }
     }
   }
