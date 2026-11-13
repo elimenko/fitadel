@@ -226,19 +226,3 @@ export const SearchResultSchema = z
   .describe('A page of search results');
 
 export class SearchResultDto extends createZodDto(SearchResultSchema) {}
-
-export const ProblemDetailsSchema = z
-  .object({
-    type: z.string(),
-    title: z.string(),
-    status: z.number().int(),
-    detail: z.string().optional(),
-    instance: z.string(),
-    errors: z
-      .array(z.object({ path: z.string(), message: z.string() }))
-      .optional()
-      .describe('Validation errors, one per invalid field'),
-  })
-  .describe('RFC 9457 problem details');
-
-export class ProblemDetailsDto extends createZodDto(ProblemDetailsSchema) {}

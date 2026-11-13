@@ -14,16 +14,14 @@ import {
   Res,
 } from '@nestjs/common';
 import {
-  ApiExtraModels,
   ApiBearerAuth,
   ApiHeader,
   ApiNoContentResponse,
-  ApiResponse,
   ApiTags,
-  getSchemaPath,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ZodResponse } from 'nestjs-zod';
+import { ApiProblem } from '@fitadel/shared-http';
 import { CurrentViewer, Public, type Viewer } from '../auth/viewer';
 import { toGtin14 } from './barcode';
 import { CustomFoodService } from './custom-food.service';
@@ -34,7 +32,6 @@ import {
   CreateFoodDto,
   FoodDto,
   FoodIdParamsDto,
-  ProblemDetailsDto,
   ReplaceFoodDto,
   SearchQueryDto,
   SearchResultDto,
@@ -45,20 +42,7 @@ const NO_TOKEN = 'No access token, or an invalid or expired one';
 const INVALID_TOKEN =
   'An invalid or expired access token (send none to read anonymously)';
 
-/** An error response in the docs: RFC 9457 problem details */
-const problem = (status: number, description: string) =>
-  ApiResponse({
-    status,
-    description,
-    content: {
-      'application/problem+json': {
-        schema: { $ref: getSchemaPath(ProblemDetailsDto) },
-      },
-    },
-  });
-
 @ApiTags('foods')
-@ApiExtraModels(ProblemDetailsDto)
 @ApiHeader({
   name: 'Accept-Language',
   required: false,
@@ -80,8 +64,8 @@ export class FoodController {
     type: SearchResultDto,
     description: "A page of matching foods (with the user's own private ones)",
   })
-  @problem(400, 'Invalid query parameters')
-  @problem(401, INVALID_TOKEN)
+  @ApiProblem(400, 'Invalid query parameters')
+  @ApiProblem(401, INVALID_TOKEN)
   async search(
     @Query() { q, limit, offset }: SearchQueryDto,
     @Headers('accept-language') acceptLanguage: string | undefined,
@@ -105,9 +89,9 @@ export class FoodController {
     type: BarcodeLookupDto,
     description: 'The best match, plus alternatives',
   })
-  @problem(400, 'Not a valid barcode (wrong length, or a mistyped digit)')
-  @problem(401, INVALID_TOKEN)
-  @problem(
+  @ApiProblem(400, 'Not a valid barcode (wrong length, or a mistyped digit)')
+  @ApiProblem(401, INVALID_TOKEN)
+  @ApiProblem(
     404,
     'Neither the catalog nor Open Food Facts has a usable food with this barcode',
   )
@@ -143,8 +127,8 @@ export class FoodController {
     type: FoodDto,
     description: 'The food, also when retired (diary entries refer to it)',
   })
-  @problem(401, INVALID_TOKEN)
-  @problem(404, "No such food, or it's someone else's private food")
+  @ApiProblem(401, INVALID_TOKEN)
+  @ApiProblem(404, "No such food, or it's someone else's private food")
   async findById(
     @Param() { id }: FoodIdParamsDto,
     @Headers('accept-language') acceptLanguage: string | undefined,
@@ -167,11 +151,11 @@ export class FoodController {
     type: FoodDto,
     description: 'Created; the Location header points to it',
   })
-  @problem(400, 'Invalid fields, or a mistyped barcode')
-  @problem(401, NO_TOKEN)
-  @problem(403, 'Public foods need the contributor role')
-  @problem(404, 'basedOnId: no such food to copy')
-  @problem(
+  @ApiProblem(400, 'Invalid fields, or a mistyped barcode')
+  @ApiProblem(401, NO_TOKEN)
+  @ApiProblem(403, 'Public foods need the contributor role')
+  @ApiProblem(404, 'basedOnId: no such food to copy')
+  @ApiProblem(
     409,
     'The barcode is taken; existingFoodId names the food that holds it',
   )
@@ -192,14 +176,14 @@ export class FoodController {
 
   @Put(':id')
   @ZodResponse({ status: 200, type: FoodDto, description: 'Replaced' })
-  @problem(400, 'Invalid fields, or a mistyped barcode')
-  @problem(401, NO_TOKEN)
-  @problem(
+  @ApiProblem(400, 'Invalid fields, or a mistyped barcode')
+  @ApiProblem(401, NO_TOKEN)
+  @ApiProblem(
     403,
     'Not your food (create your own copy instead), or public needs the contributor role',
   )
-  @problem(404, "No such food, or it's someone else's private food")
-  @problem(409, 'The barcode is taken')
+  @ApiProblem(404, "No such food, or it's someone else's private food")
+  @ApiProblem(409, 'The barcode is taken')
   async replace(
     @Param() { id }: FoodIdParamsDto,
     @Body() input: ReplaceFoodDto,
@@ -219,9 +203,9 @@ export class FoodController {
   @ApiNoContentResponse({
     description: 'Retired: no longer offered, still readable by id',
   })
-  @problem(401, NO_TOKEN)
-  @problem(403, 'Not your food')
-  @problem(404, "No such food, or it's someone else's private food")
+  @ApiProblem(401, NO_TOKEN)
+  @ApiProblem(403, 'Not your food')
+  @ApiProblem(404, "No such food, or it's someone else's private food")
   async retire(
     @Param() { id }: FoodIdParamsDto,
     @CurrentViewer() viewer: Viewer | null,
