@@ -1,5 +1,5 @@
 // Diary data model: goals (daily calorie budget and macro targets) and diary entries.
-// Tables arrive with the first features (Phase 3, Steps 3 and 4).
+// Hand-written SQL in the migrations adds what Prisma can't express: CHECK constraints.
 
 generator client {
   provider     = "prisma-client"
@@ -9,4 +9,34 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+/// How a goal changes maintenance calories into the daily budget
+enum AdjustmentUnit {
+  percent
+  kcal
+
+  @@map("adjustment_unit")
+}
+
+/// A daily goal, in effect from effectiveFrom until the user's next goal starts.
+/// Stores what the user entered; the budget and carb target are computed on read.
+model Goal {
+  /// The account (`sub` of the access token)
+  userId          String         @map("user_id") @db.Uuid
+  effectiveFrom   DateTime       @map("effective_from") @db.Date
+  maintenanceKcal Int            @map("maintenance_kcal")
+  adjustmentUnit  AdjustmentUnit @map("adjustment_unit")
+  /// Negative for a deficit: -20 (%) or -500 (kcal)
+  adjustmentValue Int            @map("adjustment_value")
+  proteinG        Int            @map("protein_g")
+  fatG            Int            @map("fat_g")
+  fiberG          Int            @map("fiber_g")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  // One goal per user and start date. The key's index also finds the goal in effect
+  // on a date: the user's latest effective_from on or before it.
+  @@id([userId, effectiveFrom])
+  @@map("goal")
 }
