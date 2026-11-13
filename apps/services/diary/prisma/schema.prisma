@@ -40,3 +40,37 @@ model Goal {
   @@id([userId, effectiveFrom])
   @@map("goal")
 }
+
+enum Meal {
+  breakfast
+  lunch
+  dinner
+  snack
+
+  @@map("meal")
+}
+
+/// Something the user ate, with its nutrient values copied in when it was logged: later
+/// changes to a food don't rewrite the diary. Values are for the whole entry, not per
+/// 100 g. NULL macros are unknown, which is not the same as 0.
+model DiaryEntry {
+  /// uuidv7: sorts by creation time, which orders entries within a meal
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// The account (`sub` of the access token)
+  userId    String   @map("user_id") @db.Uuid
+  /// The calendar day as the client sees it
+  date      DateTime @db.Date
+  meal      Meal
+  name      String?
+  kcal      Decimal  @db.Decimal(7, 1)
+  proteinG  Decimal? @map("protein_g") @db.Decimal(6, 1)
+  fatG      Decimal? @map("fat_g") @db.Decimal(6, 1)
+  carbsG    Decimal? @map("carbs_g") @db.Decimal(6, 1)
+  fiberG    Decimal? @map("fiber_g") @db.Decimal(6, 1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Every read is "the user's entries on a day"
+  @@index([userId, date])
+  @@map("diary_entry")
+}

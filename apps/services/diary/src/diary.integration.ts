@@ -143,6 +143,20 @@ describe('database', () => {
       ),
     ).rejects.toThrow(/goal_grams_non_negative/);
   });
+
+  it('accepts unknown macros in diary entries, but not negative values', async () => {
+    const insert = (proteinG: string) =>
+      query(
+        urls.app,
+        `INSERT INTO diary_entry (user_id, date, meal, kcal, protein_g, updated_at)
+         VALUES (gen_random_uuid(), '2026-11-15', 'lunch', 300, ${proteinG}, now())`,
+      );
+    // A CHECK on NULL is unknown, not false, so it passes
+    await expect(insert('NULL')).resolves.toEqual([]);
+    await expect(insert('-1')).rejects.toThrow(
+      /diary_entry_values_non_negative/,
+    );
+  });
 });
 
 let app: INestApplication;
