@@ -106,6 +106,35 @@ describe('database', () => {
       await query(urls.reader, 'SHOW default_transaction_read_only'),
     ).toEqual([{ default_transaction_read_only: 'on' }]);
   });
+
+  // Migrations contain no GRANTs: default privileges cover tables the migrator creates
+  it('lets the runtime role write and the reader read migrated tables', async () => {
+    const user = '00000000-0000-7000-8000-00000000d1a7';
+    await query(
+      urls.app,
+      `INSERT INTO goal (user_id, effective_from, maintenance_kcal, adjustment_unit,
+         adjustment_value, protein_g, fat_g, fiber_g, updated_at)
+       VALUES ('${user}', '2026-01-01', 2500, 'kcal', 0, 150, 60, 30, now())`,
+    );
+    expect(
+      await query(
+        urls.reader,
+        `SELECT maintenance_kcal FROM goal WHERE user_id = '${user}'`,
+      ),
+    ).toEqual([{ maintenance_kcal: 2500 }]);
+    await query(urls.app, `DELETE FROM goal WHERE user_id = '${user}'`);
+  });
+
+  it('rejects goals that can never be valid', async () => {
+    await expect(
+      query(
+        urls.app,
+        `INSERT INTO goal (user_id, effective_from, maintenance_kcal, adjustment_unit,
+           adjustment_value, protein_g, fat_g, fiber_g, updated_at)
+         VALUES (gen_random_uuid(), '2026-01-01', 2500, 'kcal', 0, -1, 60, 30, now())`,
+      ),
+    ).rejects.toThrow(/goal_grams_non_negative/);
+  });
 });
 
 describe('service', () => {
