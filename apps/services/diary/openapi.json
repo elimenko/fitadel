@@ -384,6 +384,303 @@
         },
         "tags": ["health"]
       }
+    },
+    "/v1/goals": {
+      "get": {
+        "operationId": "GoalController_list_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalListDto_Output"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No access token, or an invalid or expired one",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["goals"]
+      }
+    },
+    "/v1/goals/effective": {
+      "get": {
+        "operationId": "GoalController_effective_v1",
+        "parameters": [
+          {
+            "name": "date",
+            "required": true,
+            "in": "query",
+            "description": "The day to look up, as the client sees it (YYYY-MM-DD)",
+            "schema": {
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The latest goal that started on or before the date",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalDto_Output"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a valid date",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No access token, or an invalid or expired one",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No goal in effect on that date",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["goals"]
+      }
+    },
+    "/v1/goals/{effectiveFrom}": {
+      "get": {
+        "operationId": "GoalController_get_v1",
+        "parameters": [
+          {
+            "name": "effectiveFrom",
+            "required": true,
+            "in": "path",
+            "description": "A calendar date, YYYY-MM-DD",
+            "schema": {
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalDto_Output"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a valid date",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No access token, or an invalid or expired one",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No goal starts on that date",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["goals"]
+      },
+      "put": {
+        "operationId": "GoalController_put_v1",
+        "parameters": [
+          {
+            "name": "effectiveFrom",
+            "required": true,
+            "in": "path",
+            "description": "A calendar date, YYYY-MM-DD",
+            "schema": {
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoalSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created or replaced; sending the same request again is harmless",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalDto_Output"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields or date",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No access token, or an invalid or expired one",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The settings leave no budget, or protein and fat need more than the budget",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["goals"]
+      },
+      "delete": {
+        "operationId": "GoalController_delete_v1",
+        "parameters": [
+          {
+            "name": "effectiveFrom",
+            "required": true,
+            "in": "path",
+            "description": "A calendar date, YYYY-MM-DD",
+            "schema": {
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted; the previous goal now applies from that date"
+          },
+          "400": {
+            "description": "Not a valid date",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No access token, or an invalid or expired one",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No goal starts on that date",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["goals"]
+      }
     }
   },
   "info": {
@@ -402,6 +699,310 @@
         "type": "http"
       }
     },
-    "schemas": {}
+    "schemas": {
+      "ProblemDetailsDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "errors": {
+            "description": "Validation errors, one per invalid field",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": ["path", "message"]
+            }
+          }
+        },
+        "required": ["type", "title", "status", "instance"],
+        "description": "RFC 9457 problem details"
+      },
+      "GoalListDto_Output": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "effectiveFrom": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                  "description": "In effect from this date until the user's next goal starts"
+                },
+                "maintenanceKcal": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "adjustment": {
+                  "type": "object",
+                  "properties": {
+                    "unit": {
+                      "type": "string",
+                      "enum": ["percent", "kcal"]
+                    },
+                    "value": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": ["unit", "value"],
+                  "additionalProperties": false
+                },
+                "proteinG": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "fatG": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "fiberG": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "targets": {
+                  "type": "object",
+                  "properties": {
+                    "kcal": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "The daily budget"
+                    },
+                    "proteinG": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "fatG": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "carbsG": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "The energy left after protein and fat"
+                    },
+                    "fiberG": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": ["kcal", "proteinG", "fatG", "carbsG", "fiberG"],
+                  "additionalProperties": false,
+                  "description": "Computed from the settings, rounded to whole kcal and grams"
+                }
+              },
+              "required": [
+                "effectiveFrom",
+                "maintenanceKcal",
+                "adjustment",
+                "proteinG",
+                "fatG",
+                "fiberG",
+                "targets"
+              ],
+              "additionalProperties": false,
+              "description": "A daily goal and the targets it sets"
+            }
+          }
+        },
+        "required": ["items"],
+        "description": "The user's goals, latest start date first",
+        "additionalProperties": false
+      },
+      "GoalDto_Output": {
+        "type": "object",
+        "properties": {
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+            "description": "In effect from this date until the user's next goal starts"
+          },
+          "maintenanceKcal": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "adjustment": {
+            "type": "object",
+            "properties": {
+              "unit": {
+                "type": "string",
+                "enum": ["percent", "kcal"]
+              },
+              "value": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": ["unit", "value"],
+            "additionalProperties": false
+          },
+          "proteinG": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "fatG": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "fiberG": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "targets": {
+            "type": "object",
+            "properties": {
+              "kcal": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "The daily budget"
+              },
+              "proteinG": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "fatG": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "carbsG": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "The energy left after protein and fat"
+              },
+              "fiberG": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": ["kcal", "proteinG", "fatG", "carbsG", "fiberG"],
+            "additionalProperties": false,
+            "description": "Computed from the settings, rounded to whole kcal and grams"
+          }
+        },
+        "required": [
+          "effectiveFrom",
+          "maintenanceKcal",
+          "adjustment",
+          "proteinG",
+          "fatG",
+          "fiberG",
+          "targets"
+        ],
+        "description": "A daily goal and the targets it sets",
+        "additionalProperties": false
+      },
+      "GoalSettingsDto": {
+        "type": "object",
+        "properties": {
+          "maintenanceKcal": {
+            "type": "integer",
+            "minimum": 800,
+            "maximum": 8000,
+            "description": "Calories a day that keep the weight stable"
+          },
+          "adjustment": {
+            "default": {
+              "unit": "kcal",
+              "value": 0
+            },
+            "description": "From maintenance to the budget: negative for a deficit, positive for a surplus; none when omitted",
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "unit": {
+                    "type": "string",
+                    "const": "percent"
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": -50,
+                    "maximum": 50
+                  }
+                },
+                "required": ["unit", "value"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "unit": {
+                    "type": "string",
+                    "const": "kcal"
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": -3000,
+                    "maximum": 3000
+                  }
+                },
+                "required": ["unit", "value"]
+              }
+            ]
+          },
+          "proteinG": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 500
+          },
+          "fatG": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 300
+          },
+          "fiberG": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 150
+          }
+        },
+        "required": ["maintenanceKcal", "proteinG", "fatG", "fiberG"]
+      }
+    }
   }
 }
