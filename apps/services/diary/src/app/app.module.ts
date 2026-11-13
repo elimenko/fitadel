@@ -9,11 +9,12 @@ import {
 import { ProblemDetailsFilter } from '@fitadel/shared-http';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env';
+import { GoalModule } from '../goal/goal.module';
 import { HealthModule } from '../health/health.module';
 import { coreModules } from './core';
 
 @Module({
-  imports: [...coreModules, HealthModule],
+  imports: [...coreModules, HealthModule, GoalModule],
   providers: [
     // Verifies identity's access tokens locally, with its published keys
     {
