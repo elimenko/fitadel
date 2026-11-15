@@ -19,18 +19,12 @@ import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import {
   type Food as GrpcFood,
+  type FoodServiceGrpcClient,
   NutrientBasis,
   catalogGrpcOptions,
-  protobufFileName,
+  createFoodServiceClient,
 } from '@fitadel/catalog-grpc';
-import {
-  type ServiceError,
-  Metadata,
-  credentials,
-  loadPackageDefinition,
-  status,
-} from '@grpc/grpc-js';
-import { loadSync } from '@grpc/proto-loader';
+import { type ServiceError, Metadata, status } from '@grpc/grpc-js';
 import { generateKeyPair } from 'jose';
 import { Client, Pool } from 'pg';
 import type { BarcodeLookupDto, Food, SearchResultDto } from './food/food.dto';
@@ -45,31 +39,6 @@ import { WHEY_BARCODE, wheyProtein } from './off/off-api-product.fixture';
 const workspaceRoot = join(__dirname, '../../../..');
 /** The gRPC contract's .proto files, as the build copies them */
 const PROTO_DIR = join(workspaceRoot, 'libs/catalog/grpc/proto');
-
-/** The generated FoodService client, as grpc-js builds it from the .proto */
-type FoodServiceClient = InstanceType<
-  CatalogPackage['fitadel']['catalog']['v1']['FoodService']
->;
-interface CatalogPackage {
-  fitadel: {
-    catalog: {
-      v1: {
-        FoodService: new (
-          address: string,
-          creds: ReturnType<typeof credentials.createInsecure>,
-        ) => {
-          getFood(
-            request: object,
-            metadata: Metadata,
-            options: { deadline: number },
-            callback: (error: ServiceError | null, response: never) => void,
-          ): void;
-          close(): void;
-        };
-      };
-    };
-  };
-}
 const projectRoot = join(__dirname, '..');
 
 /** The same pinned image as local development (compose.yaml is the single source). */
@@ -867,7 +836,7 @@ describe('service', () => {
   describe('gRPC FoodService', () => {
     const BOB = '0192f8a4-6a3e-7c00-8f00-00000000b0b0';
     const ALICE = '0192f8a4-6a3e-7c00-8f00-0000000a11ce';
-    let client: FoodServiceClient;
+    let client: FoodServiceGrpcClient;
     let kefir: string;
 
     const getFood = (
@@ -878,10 +847,13 @@ describe('service', () => {
         const metadata = new Metadata();
         if (token) metadata.set('authorization', `Bearer ${token}`);
         client.getFood(
-          request,
+          { languages: [], ...request },
           metadata,
           { deadline: Date.now() + 5000 },
-          (error, response) => (error ? reject(error) : resolve(response)),
+          (error, response) =>
+            error || !response
+              ? reject(error)
+              : resolve(response as { food: GrpcFood }),
         );
       });
     /** The gRPC status of a failed call */
@@ -892,14 +864,7 @@ describe('service', () => {
       );
 
     beforeAll(async () => {
-      const { loader } = catalogGrpcOptions(grpcAddress, PROTO_DIR).options;
-      const loaded = loadPackageDefinition(
-        loadSync(protobufFileName, loader),
-      ) as unknown as CatalogPackage;
-      client = new loaded.fitadel.catalog.v1.FoodService(
-        grpcAddress,
-        credentials.createInsecure(),
-      );
+      client = createFoodServiceClient(grpcAddress, PROTO_DIR);
 
       // Bob's private food with an unknown protein (null) and a known 0 fiber
       const response = await fetch(`${await app.getUrl()}/v1/foods`, {
