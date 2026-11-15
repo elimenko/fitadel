@@ -1,40 +1,26 @@
 import {
-  catalogGrpcOptions,
   createFoodServiceClient,
-  type GetFoodRequest,
-  type GetFoodResponse,
+  type Food,
   NutrientBasis,
-  protobufFileName,
 } from '@fitadel/catalog-grpc';
 import {
-  type GrpcObject,
-  type Metadata,
-  type ServerUnaryCall,
-  type ServiceDefinition,
-  Server,
-  ServerCredentials,
-  loadPackageDefinition,
-  status,
-} from '@grpc/grpc-js';
-import { loadSync } from '@grpc/proto-loader';
+  FakeCatalog,
+  PROTO_DIR,
+  type GrpcFailure,
+} from '@fitadel/catalog-grpc/testing';
+import { type Metadata, status } from '@grpc/grpc-js';
 import {
   BadGatewayException,
   GatewayTimeoutException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { createServer } from 'node:net';
-import { join } from 'node:path';
 import { CATALOG_CHANNEL_OPTIONS, CatalogFoods } from './catalog-foods';
 
-const PROTO_DIR = join(__dirname, '../../../../../libs/catalog/grpc/proto');
 const FOOD_ID = '0192f8a4-6a3e-7c00-8f00-000000000001';
 const AS_BOB = { authorization: 'Bearer bobs-token', languages: ['en', 'pl'] };
 
-type Answer = (
-  call: ServerUnaryCall<GetFoodRequest, GetFoodResponse>,
-) => Promise<GetFoodResponse | { code: status; details: string }>;
-
-const kefirFood = {
+const kefir: Food = {
   id: FOOD_ID,
   name: 'Kefir',
   brand: 'Piątnica',
@@ -42,66 +28,33 @@ const kefirFood = {
   // Protein unset (unknown); fiber a known 0
   per100: { kcal: 51, fatG: 2, carbsG: 4.7, fiberG: 0 },
 };
-const kefir: GetFoodResponse = { food: kefirFood };
-const fail =
-  (code: status) => async (): Promise<{ code: status; details: string }> => ({
-    code,
-    details: status[code],
-  });
+const failure = (code: status): GrpcFailure => ({
+  code,
+  details: status[code],
+});
 
-/** A stand-in catalog: a real gRPC server on a random port, answering as told */
+/** Against a stand-in catalog: a real gRPC server on a random port */
 describe('CatalogFoods', () => {
-  let server: Server;
-  let address: string;
-  let answer: Answer;
-  let calls: ServerUnaryCall<GetFoodRequest, GetFoodResponse>[];
+  let catalog: FakeCatalog;
   let foods: CatalogFoods;
 
   beforeAll(async () => {
-    const { loader } = catalogGrpcOptions('', PROTO_DIR).options;
-    const loaded = loadPackageDefinition(loadSync(protobufFileName, loader));
-    const v1 = ((loaded.fitadel as GrpcObject).catalog as GrpcObject)
-      .v1 as GrpcObject;
-    const service = (v1.FoodService as { service: ServiceDefinition }).service;
-
-    server = new Server();
-    server.addService(service, {
-      getFood: (
-        call: ServerUnaryCall<GetFoodRequest, GetFoodResponse>,
-        callback: (
-          error: { code: status; details: string } | null,
-          response?: GetFoodResponse,
-        ) => void,
-      ) => {
-        calls.push(call);
-        answer(call).then((result) =>
-          'code' in result ? callback(result) : callback(null, result),
-        );
-      },
-    });
-    const port = await new Promise<number>((resolve, reject) =>
-      server.bindAsync(
-        '127.0.0.1:0',
-        ServerCredentials.createInsecure(),
-        (error, bound) => (error ? reject(error) : resolve(bound)),
-      ),
-    );
-    address = `127.0.0.1:${port}`;
+    catalog = await FakeCatalog.start();
   });
 
   beforeEach(() => {
-    calls = [];
+    catalog.reset();
+    catalog.foods.set(FOOD_ID, kefir);
     foods = new CatalogFoods(
-      createFoodServiceClient(address, PROTO_DIR, CATALOG_CHANNEL_OPTIONS),
+      createFoodServiceClient(catalog.url, PROTO_DIR, CATALOG_CHANNEL_OPTIONS),
     );
   });
 
   afterEach(() => foods.onModuleDestroy());
 
-  afterAll(() => server.forceShutdown());
+  afterAll(() => catalog.stop());
 
   it('copies a food, with unknown values as null', async () => {
-    answer = async () => kefir;
     expect(await foods.get(FOOD_ID, AS_BOB)).toEqual({
       id: FOOD_ID,
       name: 'Kefir',
@@ -112,10 +65,9 @@ describe('CatalogFoods', () => {
   });
 
   it("calls on the user's behalf: their token and languages, and a deadline", async () => {
-    answer = async () => kefir;
     await foods.get(FOOD_ID, AS_BOB);
 
-    const [call] = calls;
+    const [call] = catalog.calls;
     expect(call.request).toEqual({ id: FOOD_ID, languages: ['en', 'pl'] });
     expect((call.metadata as Metadata).get('authorization')).toEqual([
       'Bearer bobs-token',
@@ -129,24 +81,25 @@ describe('CatalogFoods', () => {
   });
 
   it('answers null when the catalog has no such food for the user', async () => {
-    answer = fail(status.NOT_FOUND);
+    catalog.foods.clear();
     expect(await foods.get(FOOD_ID, AS_BOB)).toBeNull();
-    expect(calls).toHaveLength(1);
+    expect(catalog.calls).toHaveLength(1);
   });
 
   it('retries once when the catalog is unavailable', async () => {
     let attempt = 0;
-    answer = async () => (++attempt === 1 ? fail(status.UNAVAILABLE)() : kefir);
+    catalog.answer = async () =>
+      ++attempt === 1 ? failure(status.UNAVAILABLE) : { food: kefir };
     expect((await foods.get(FOOD_ID, AS_BOB))?.name).toBe('Kefir');
-    expect(calls).toHaveLength(2);
+    expect(catalog.calls).toHaveLength(2);
   });
 
   it('answers 503 when the catalog stays unavailable', async () => {
-    answer = fail(status.UNAVAILABLE);
+    catalog.failWith(status.UNAVAILABLE);
     await expect(foods.get(FOOD_ID, AS_BOB)).rejects.toBeInstanceOf(
       ServiceUnavailableException,
     );
-    expect(calls).toHaveLength(2);
+    expect(catalog.calls).toHaveLength(2);
   });
 
   it('answers 503 when nothing listens at the address', async () => {
@@ -166,8 +119,10 @@ describe('CatalogFoods', () => {
   it('gives up after the deadline with 504', async () => {
     // The catalog answers too late. It also knows the deadline (grpc-timeout) and ends
     // the call itself when it passes, so its late answer goes nowhere.
-    answer = () =>
-      new Promise((resolve) => setTimeout(() => resolve(kefir), 1500));
+    catalog.answer = () =>
+      new Promise((resolve) =>
+        setTimeout(() => resolve({ food: kefir }), 1500),
+      );
     const started = Date.now();
     await expect(foods.get(FOOD_ID, AS_BOB)).rejects.toBeInstanceOf(
       GatewayTimeoutException,
@@ -180,11 +135,11 @@ describe('CatalogFoods', () => {
   it.each([status.INTERNAL, status.UNAUTHENTICATED, status.INVALID_ARGUMENT])(
     'answers 502 without retrying for other failures (%s)',
     async (code) => {
-      answer = fail(code);
+      catalog.failWith(code);
       await expect(foods.get(FOOD_ID, AS_BOB)).rejects.toBeInstanceOf(
         BadGatewayException,
       );
-      expect(calls).toHaveLength(1);
+      expect(catalog.calls).toHaveLength(1);
     },
   );
 
@@ -194,7 +149,7 @@ describe('CatalogFoods', () => {
       // A basis added in a newer catalog arrives as its number
       7 as NutrientBasis,
     ]) {
-      answer = async () => ({ food: { ...kefirFood, basis } });
+      catalog.foods.set(FOOD_ID, { ...kefir, basis });
       await expect(foods.get(FOOD_ID, AS_BOB)).rejects.toBeInstanceOf(
         BadGatewayException,
       );
