@@ -10,11 +10,14 @@ import { ProblemDetailsFilter } from '@fitadel/shared-http';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env';
 import { FoodModule } from '../food/food.module';
+import { FoodGrpcController } from '../grpc/food-grpc.controller';
 import { HealthModule } from '../health/health.module';
 import { coreModules } from './core';
 
 @Module({
   imports: [...coreModules, HealthModule, FoodModule],
+  // gRPC for other services (main.ts starts its server)
+  controllers: [FoodGrpcController],
   providers: [
     // Verifies identity's access tokens locally, with its published keys
     {

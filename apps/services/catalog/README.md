@@ -2,9 +2,9 @@
 
 The food catalog: foods with nutrition values per 100 g or 100 ml, their servings and
 barcodes. Imported foods come from [Open Food Facts](https://world.openfoodfacts.org);
-users add their own. Built with NestJS and Prisma
-([ADR-0007](../../../docs/adr/0007-prisma-database-access.md)) on PostgreSQL;
-search uses trigram and full-text indexes
+users add their own. Clients use its REST API; other services read foods over gRPC.
+Built with NestJS and Prisma ([ADR-0007](../../../docs/adr/0007-prisma-database-access.md))
+on PostgreSQL; search uses trigram and full-text indexes
 ([ADR-0006](../../../docs/adr/0006-postgresql-catalog-search.md)).
 
 ## Running it
@@ -104,6 +104,24 @@ popularity. There's no total count, which would cost as much as the slowest sear
 The service depends on the `FoodSearch` interface, so a search engine could replace the
 PostgreSQL implementation (ADR-0006). Most queries take 15–50 ms on 1.3 million foods;
 very common words (`protein`) take up to about 200 ms, since every match is scored.
+
+## gRPC for other services
+
+Other services read foods over gRPC on `GRPC_PORT` (default 50051), from the same
+process as the REST API ([ADR-0011](../../../docs/adr/0011-grpc-between-services.md)).
+The gateway never routes this port. The contract is in
+[libs/catalog/grpc](../../../libs/catalog/grpc).
+
+`FoodService.GetFood` follows the REST API's rules: the caller forwards the user's
+access token in the `authorization` metadata, and without one only public foods are
+found.
+
+| Status             | When                                                   |
+| ------------------ | ------------------------------------------------------ |
+| `NOT_FOUND`        | no such food, or someone else's private food           |
+| `INVALID_ARGUMENT` | the id is not a UUID                                   |
+| `UNAUTHENTICATED`  | a token that isn't valid (never treated as "no token") |
+| `UNAVAILABLE`      | identity's signing keys can't be fetched; try again    |
 
 ## Database access
 

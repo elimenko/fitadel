@@ -28,6 +28,9 @@
   ],
   "references": [
     {
+      "path": "../../../libs/catalog/grpc/tsconfig.lib.json"
+    },
+    {
       "path": "../../../libs/shared/telemetry/tsconfig.lib.json"
     },
     {

@@ -30,5 +30,7 @@ import { PostgresFoodSearch } from './postgres-food-search';
         }),
     },
   ],
+  // For the gRPC controller, which lives next to the token verifier (AppModule)
+  exports: [CustomFoodService],
 })
 export class FoodModule {}

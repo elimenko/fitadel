@@ -184,13 +184,17 @@
     ]
   },
   "dependencies": {
+    "@fitadel/catalog-grpc": "workspace:*",
     "@fitadel/shared-auth": "workspace:*",
     "@fitadel/shared-http": "workspace:*",
     "@fitadel/shared-nutrition": "workspace:*",
     "@fitadel/shared-telemetry": "workspace:*",
+    "@grpc/grpc-js": "1.14.7",
+    "@grpc/proto-loader": "0.8.1",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^12.0.1",
     "@nestjs/core": "^11.0.0",
+    "@nestjs/microservices": "11.2.8",
     "@nestjs/platform-express": "^11.0.0",
     "@nestjs/swagger": "11.4.7",
     "@nestjs/terminus": "^12.1.0",

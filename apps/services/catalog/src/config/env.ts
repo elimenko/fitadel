@@ -6,6 +6,8 @@ export const envSchema = z.object({
     .enum(['development', 'test', 'production'])
     .default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  /** gRPC for other services (ADR-0011); the gateway never routes it */
+  GRPC_PORT: z.coerce.number().int().min(1).max(65535).default(50051),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),

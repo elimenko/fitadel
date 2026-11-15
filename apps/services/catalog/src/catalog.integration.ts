@@ -17,6 +17,20 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
+import {
+  type Food as GrpcFood,
+  NutrientBasis,
+  catalogGrpcOptions,
+  protobufFileName,
+} from '@fitadel/catalog-grpc';
+import {
+  type ServiceError,
+  Metadata,
+  credentials,
+  loadPackageDefinition,
+  status,
+} from '@grpc/grpc-js';
+import { loadSync } from '@grpc/proto-loader';
 import { generateKeyPair } from 'jose';
 import { Client, Pool } from 'pg';
 import type { BarcodeLookupDto, Food, SearchResultDto } from './food/food.dto';
@@ -29,6 +43,33 @@ import { importOffDump } from './import/off-import';
 import { WHEY_BARCODE, wheyProtein } from './off/off-api-product.fixture';
 
 const workspaceRoot = join(__dirname, '../../../..');
+/** The gRPC contract's .proto files, as the build copies them */
+const PROTO_DIR = join(workspaceRoot, 'libs/catalog/grpc/proto');
+
+/** The generated FoodService client, as grpc-js builds it from the .proto */
+type FoodServiceClient = InstanceType<
+  CatalogPackage['fitadel']['catalog']['v1']['FoodService']
+>;
+interface CatalogPackage {
+  fitadel: {
+    catalog: {
+      v1: {
+        FoodService: new (
+          address: string,
+          creds: ReturnType<typeof credentials.createInsecure>,
+        ) => {
+          getFood(
+            request: object,
+            metadata: Metadata,
+            options: { deadline: number },
+            callback: (error: ServiceError | null, response: never) => void,
+          ): void;
+          close(): void;
+        };
+      };
+    };
+  };
+}
 const projectRoot = join(__dirname, '..');
 
 /** The same pinned image as local development (compose.yaml is the single source). */
@@ -319,6 +360,7 @@ let identity: FakeIdentity;
 
 describe('service', () => {
   let app: INestApplication;
+  let grpcAddress: string;
 
   beforeAll(async () => {
     await new Promise<void>((resolve) =>
@@ -339,6 +381,10 @@ describe('service', () => {
     }).compile();
     app = moduleRef.createNestApplication();
     configureHttp(app);
+    // gRPC as in main.ts, with the contract from the library's source
+    grpcAddress = `127.0.0.1:${await freePort()}`;
+    app.connectMicroservice(catalogGrpcOptions(grpcAddress, PROTO_DIR));
+    await app.startAllMicroservices();
     await app.listen(0);
   });
 
@@ -817,6 +863,118 @@ describe('service', () => {
     });
   });
 
+  // A real gRPC client, as another service would use (ADR-0011)
+  describe('gRPC FoodService', () => {
+    const BOB = '0192f8a4-6a3e-7c00-8f00-00000000b0b0';
+    const ALICE = '0192f8a4-6a3e-7c00-8f00-0000000a11ce';
+    let client: FoodServiceClient;
+    let kefir: string;
+
+    const getFood = (
+      request: { id: string; languages?: string[] },
+      token?: string,
+    ) =>
+      new Promise<{ food: GrpcFood }>((resolve, reject) => {
+        const metadata = new Metadata();
+        if (token) metadata.set('authorization', `Bearer ${token}`);
+        client.getFood(
+          request,
+          metadata,
+          { deadline: Date.now() + 5000 },
+          (error, response) => (error ? reject(error) : resolve(response)),
+        );
+      });
+    /** The gRPC status of a failed call */
+    const failure = (call: Promise<unknown>) =>
+      call.then(
+        () => 'OK',
+        (error: ServiceError) => status[error.code],
+      );
+
+    beforeAll(async () => {
+      const { loader } = catalogGrpcOptions(grpcAddress, PROTO_DIR).options;
+      const loaded = loadPackageDefinition(
+        loadSync(protobufFileName, loader),
+      ) as unknown as CatalogPackage;
+      client = new loaded.fitadel.catalog.v1.FoodService(
+        grpcAddress,
+        credentials.createInsecure(),
+      );
+
+      // Bob's private food with an unknown protein (null) and a known 0 fiber
+      const response = await fetch(`${await app.getUrl()}/v1/foods`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${await identity.token(BOB)}`,
+        },
+        body: JSON.stringify({
+          names: { pl: 'Kefir Boba', en: "Bob's kefir" },
+          basis: 'ml',
+          per100: { kcal: 51, protein: null, fat: 2, carbs: 4.7, fiber: 0 },
+        }),
+      });
+      expect(response.status).toBe(201);
+      kefir = ((await response.json()) as Food).id;
+    });
+
+    afterAll(() => client?.close());
+
+    it("returns the user's own private food, with unknown values unset", async () => {
+      const { food } = await getFood(
+        { id: kefir, languages: ['en-GB', 'pl'] },
+        await identity.token(BOB),
+      );
+      expect(food).toEqual({
+        id: kefir,
+        name: "Bob's kefir",
+        basis: NutrientBasis.NUTRIENT_BASIS_ML,
+        per100: { kcal: 51, fatG: 2, carbsG: 4.7, fiberG: 0 },
+      });
+      // Unset, not 0: "unknown" survives the wire
+      expect(food.per100).not.toHaveProperty('proteinG');
+    });
+
+    it("answers NOT_FOUND for someone else's private food, with a token or without", async () => {
+      expect(
+        await failure(getFood({ id: kefir }, await identity.token(ALICE))),
+      ).toBe('NOT_FOUND');
+      expect(await failure(getFood({ id: kefir }))).toBe('NOT_FOUND');
+    });
+
+    it('returns public foods without a token', async () => {
+      // Twaróg, from the import tests
+      const db = new Client({ connectionString: urls.app });
+      await db.connect();
+      const { rows } = await db.query<{ id: string }>(
+        "SELECT id FROM food WHERE source = 'off' AND source_ref = '5900512300108'",
+      );
+      await db.end();
+      const { id } = rows[0];
+      const { food } = await getFood({ id, languages: ['pl'] });
+      expect(food).toMatchObject({
+        id,
+        name: 'Twaróg półtłusty',
+        basis: NutrientBasis.NUTRIENT_BASIS_G,
+      });
+    });
+
+    it('refuses a broken token, even where none is needed', async () => {
+      const { privateKey } = await generateKeyPair('ES256');
+      const forged = await identity.token(BOB, { key: privateKey });
+      expect(await failure(getFood({ id: kefir }, forged))).toBe(
+        'UNAUTHENTICATED',
+      );
+      expect(await failure(getFood({ id: kefir }, 'not-a-jwt'))).toBe(
+        'UNAUTHENTICATED',
+      );
+    });
+
+    it('answers INVALID_ARGUMENT for an id that is not a UUID', async () => {
+      expect(await failure(getFood({ id: 'kefir' }))).toBe('INVALID_ARGUMENT');
+    });
+  });
+
   describe('GET /v1/foods (search)', () => {
     const search = async (query: string) => {
       const response = await fetch(`${await app.getUrl()}/v1/foods?${query}`);
@@ -910,6 +1068,7 @@ onPosix('shutdown', () => {
           ...process.env,
           NODE_ENV: 'production',
           PORT: String(port),
+          GRPC_PORT: String(await freePort()),
           DATABASE_URL: urls.app,
           // Telemetry on, with no collector listening (port 9 refuses): shutdown must
           // still exit cleanly when the collector is unreachable
