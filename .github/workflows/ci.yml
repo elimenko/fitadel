@@ -39,7 +39,18 @@ jobs:
 
       - run: pnpm exec prettier --check .
       - run: pnpm nx sync:check
-      - run: pnpm nx affected -t lint test typecheck build --output-style=static
+      - run: pnpm nx affected -t lint test typecheck build proto-breaking --output-style=static
+
+      # The committed gRPC code must match the .proto contracts
+      - name: Check that the generated gRPC code is up to date
+        run: |
+          pnpm nx run-many -t proto-generate --skip-nx-cache --output-style=static
+          changes=$(git status --porcelain -- ':(glob)libs/**/src/generated/**')
+          if [ -n "$changes" ]; then
+            echo "$changes"
+            echo "Generated code is out of date: run 'pnpm nx run-many -t proto-generate' and commit"
+            exit 1
+          fi
 
       # The committed API description must match the code (no server or database needed)
       - name: Check that each service's openapi.json is up to date
