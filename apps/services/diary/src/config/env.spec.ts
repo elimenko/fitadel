@@ -11,7 +11,20 @@ describe('validateEnv', () => {
       DATABASE_URL,
       AUTH_ISSUER: 'http://localhost:8080/oidc',
       AUTH_AUDIENCE: 'https://api.fitadel.local',
+      CATALOG_GRPC_URL: 'localhost:50051',
     });
+  });
+
+  it('takes the catalog address as host:port', () => {
+    expect(
+      validateEnv({
+        DATABASE_URL,
+        CATALOG_GRPC_URL: 'catalog.fitadel.svc:50051',
+      }).CATALOG_GRPC_URL,
+    ).toBe('catalog.fitadel.svc:50051');
+    expect(() =>
+      validateEnv({ DATABASE_URL, CATALOG_GRPC_URL: 'http://catalog:50051' }),
+    ).toThrow(/CATALOG_GRPC_URL/);
   });
 
   it('takes a separate address for the signing keys', () => {

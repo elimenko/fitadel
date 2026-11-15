@@ -20,6 +20,16 @@ export const envSchema = z.object({
    * cluster it can be identity's internal address instead of the public one.
    */
   AUTH_JWKS_URI: z.url().optional(),
+  /** The catalog's gRPC address (host:port), for copying foods into entries (ADR-0011) */
+  CATALOG_GRPC_URL: z
+    .string()
+    .regex(/^[\w.-]+:\d+$/, 'Use host:port, e.g. localhost:50051')
+    .default('localhost:50051'),
+  /**
+   * Where the catalog's .proto files are. Defaults to the copy next to the bundle;
+   * tests point it at libs/catalog/grpc/proto.
+   */
+  CATALOG_PROTO_DIR: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
