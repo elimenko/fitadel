@@ -12,6 +12,15 @@ its effect in review.
 
 Calls carry the user's access token in the `authorization` metadata.
 
+- `catalogGrpcOptions(url, protoDir)`: how the server and clients load the contract.
+  Both must load it the same way (field names, unset values).
+- `createFoodServiceClient(url, protoDir, channelOptions)`: a typed grpc-js client.
+- `@fitadel/catalog-grpc/testing`: `FakeCatalog`, a real gRPC server on a random port
+  that serves the foods a test adds or fails as told, and `PROTO_DIR`.
+
+A deployable copies `proto/` next to its bundle (see the catalog's and the diary's
+`webpack.config.js`) and passes that folder as `protoDir`.
+
 ## Changing the contract
 
 Clients built against the old contract keep running while you deploy, so changes must
