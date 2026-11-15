@@ -70,8 +70,9 @@ export class OidcPayloadAdapter implements Adapter {
   /**
    * Marks a code or refresh token as used, atomically: of two concurrent requests with
    * the same code, exactly one updates the row. The engine checks `consumed` before
-   * calling this, but two requests can both pass that check (WP-10); the loser ends up
-   * here with 0 rows updated and is treated like a reuse: the grant is revoked.
+   * calling this, but two requests can both pass that check (a check-then-act race);
+   * the loser ends up here with 0 rows updated and is treated like a reuse: the grant
+   * is revoked.
    */
   async consume(id: string) {
     const key = { model: this.model, id: digest(id) };

@@ -32,7 +32,7 @@ export class AccountService {
       return undefined;
     }
     if (check.needsRehash) {
-      // The only moment the plain password is at hand: upgrade the stored hash (WP-20)
+      // The only moment the plain password is at hand: upgrade the stored hash
       await this.prisma.accountPassword.update({
         where: { accountId: account.id },
         data: { hash: await this.hasher.hash(password) },

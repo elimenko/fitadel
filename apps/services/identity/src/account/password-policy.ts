@@ -31,7 +31,7 @@ export class PasswordPolicy {
 
   /**
    * Also asked at every sign-in: a password that was fine when chosen may appear in a
-   * breach later (WP-23). Fails open: an outage of the breach API must not block
+   * breach later. Fails open: an outage of the breach API must not block
    * registrations or sign-ins.
    */
   async isBreached(password: string): Promise<boolean> {

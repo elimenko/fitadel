@@ -601,7 +601,7 @@ describe('service', () => {
       expect(response.status).toBe(200);
     });
 
-    it('refuses a token signed by a key that is not identity’s (WP-22)', async () => {
+    it('refuses a token signed by a key that is not identity’s', async () => {
       const { privateKey } = await generateKeyPair('ES256');
       const forged = await identity.token(BOB, {
         roles: ['contributor'],

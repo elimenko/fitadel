@@ -56,7 +56,7 @@ describe('AccountService.signIn', () => {
     expect(await accounts.signIn('google@b.c', 'anything')).toBeUndefined();
   });
 
-  it('upgrades a hash made with outdated parameters (WP-20)', async () => {
+  it('upgrades a hash made with outdated parameters', async () => {
     findUnique.mockResolvedValue(
       await withPassword('correct horse', { memoryCost: 4096, timeCost: 1 }),
     );

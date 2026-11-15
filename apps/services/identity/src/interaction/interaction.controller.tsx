@@ -173,7 +173,7 @@ export class InteractionController {
     }
     await byEmail.release();
 
-    // The password is right but has appeared in a breach since it was chosen (WP-23).
+    // The password is right but has appeared in a breach since it was chosen.
     // Whoever typed it may have it from a leak, so getting in now takes the inbox: a
     // reset link, not a new password chosen here (that would hand an attacker the
     // account). The page says why, so the owner changes it elsewhere too.
