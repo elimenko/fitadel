@@ -29,3 +29,4 @@ Write it before significant work depends on the decision, not after the fact.
 | [0008](0008-oidc-provider.md)                    | Use oidc-provider for the OpenID Provider                        | Accepted |
 | [0009](0009-envoy-api-gateway.md)                | Use Envoy as the API gateway                                     | Accepted |
 | [0010](0010-goals-and-diary-in-one-service.md)   | Keep goals and the food diary in one service                     | Accepted |
+| [0011](0011-grpc-between-services.md)            | Use gRPC for synchronous calls between services                  | Accepted |
