@@ -24,7 +24,8 @@ const KEEP_MS = 24 * 60 * 60 * 1000;
  *
  * `attempt()` counts first and decides second, in one atomic statement: of N
  * simultaneous attempts, exactly `max` are allowed, however they interleave. Reading
- * the count and incrementing it afterwards would let a burst through (WP-10).
+ * the count and incrementing it afterwards would let a burst through (a
+ * check-then-act race).
  */
 @Injectable()
 export class RateLimiter implements OnModuleInit, OnModuleDestroy {

@@ -76,7 +76,7 @@ describe('AccessTokenVerifier', () => {
     expect([...viewer.roles]).toEqual(['contributor']);
   });
 
-  it('refuses a token signed by any other key (WP-22)', async () => {
+  it('refuses a token signed by any other key', async () => {
     const error = await refusal(
       verifier.verify(await token({ key: otherKey })),
     );

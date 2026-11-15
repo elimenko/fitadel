@@ -41,7 +41,7 @@ export class InvalidAccessToken extends Error {
 
 /**
  * Verifies access tokens locally, without asking identity: the signature against
- * identity's public keys, then the claims. Every check matters (WP-18):
+ * identity's public keys, then the claims. Every check matters:
  *   - alg only ES256: never "none", never HS256 (where a public key could be misused
  *     as a shared secret)
  *   - iss: issued by our identity service
