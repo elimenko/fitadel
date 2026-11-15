@@ -5,6 +5,8 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
 import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { catalogGrpcOptions } from '@fitadel/catalog-grpc';
 import { AppModule } from './app/app.module';
 import type { Env } from './config/env';
 import {
@@ -45,6 +47,15 @@ async function bootstrap() {
     });
   }
 
+  // gRPC for other services, in the same process (ADR-0011). It gets none of the HTTP
+  // app's global guard, pipes or filters; app.close() stops it too.
+  const grpcPort = config.get('GRPC_PORT', { infer: true });
+  app.connectMicroservice(
+    // webpack copies the .proto files next to the bundle (webpack.config.js)
+    catalogGrpcOptions(`0.0.0.0:${grpcPort}`, join(__dirname, 'proto')),
+  );
+  await app.startAllMicroservices();
+
   const port = config.get('PORT', { infer: true });
   await app.listen(port);
   // Set when Nx waits for this server to be ready
@@ -59,7 +70,9 @@ async function bootstrap() {
       // @nx/js isn't installed
     }
   }
-  logger.log(`Catalog service is running on: http://localhost:${port}`);
+  logger.log(
+    `Catalog service is running on: http://localhost:${port} (gRPC on port ${grpcPort})`,
+  );
 }
 
 /** Writes the OpenAPI document to a file, without starting the server */

@@ -7,6 +7,7 @@ describe('validateEnv', () => {
     expect(validateEnv({ DATABASE_URL })).toEqual({
       NODE_ENV: 'development',
       PORT: 3000,
+      GRPC_PORT: 50051,
       LOG_LEVEL: 'info',
       DATABASE_URL,
       OFF_LOOKUP: 'enabled',
