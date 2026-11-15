@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package fitadel.catalog.v1;
+
+// Foods for other services. Calls carry the user's access token in the
+// `authorization` metadata, verified as in the catalog's REST API.
+service FoodService {
+  // A public food or one of the user's own private foods, also when retired;
+  // NOT_FOUND otherwise.
+  rpc GetFood(GetFoodRequest) returns (GetFoodResponse);
+}
+
+message GetFoodRequest {
+  string id = 1;
+  // Preferred languages, best first (from Accept-Language), e.g. ["pl", "en"]
+  repeated string languages = 2;
+}
+
+message GetFoodResponse {
+  Food food = 1;
+}
+
+message Food {
+  string id = 1;
+  // In the first of the requested languages the food has
+  string name = 2;
+  optional string brand = 3;
+  NutrientBasis basis = 4;
+  // Per 100 g or per 100 ml, depending on basis
+  Nutrients per_100 = 5;
+}
+
+enum NutrientBasis {
+  NUTRIENT_BASIS_UNSPECIFIED = 0;
+  NUTRIENT_BASIS_G = 1;
+  NUTRIENT_BASIS_ML = 2;
+}
+
+message Nutrients {
+  double kcal = 1;
+  // Unset means unknown, which is not the same as 0
+  optional double protein_g = 2;
+  optional double fat_g = 3;
+  optional double carbs_g = 4;
+  optional double fiber_g = 5;
+}

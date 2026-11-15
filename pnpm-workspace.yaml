@@ -20,3 +20,5 @@ allowBuilds:
   protobufjs: false
   # Install analytics (via swagger-ui-dist); no function for us
   '@scarf/scarf': false
+  # postinstall only checks that the platform binary (an optional dependency) arrived
+  '@bufbuild/buf': false
