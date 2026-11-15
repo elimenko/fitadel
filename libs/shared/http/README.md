@@ -7,6 +7,8 @@ HTTP conventions shared by Fitadel's REST services:
   `ProblemException` adds extension members, e.g. `existingFoodId`.
 - `configureHttp`: URI versioning (`/v1/...`). Apply it in every entry point (`main.ts`,
   tests, the `openapi` command), so they all serve the same API.
+- `preferredLanguages`: the languages an `Accept-Language` header asks for, best
+  first, as primary subtags (`ru-RU,en;q=0.8` → `['ru', 'en']`).
 - `createOpenApiDocument` and `serveApiDocs`: the OpenAPI 3.1 document from the
   controllers and their zod schemas, and Swagger UI at `/docs`.
 
