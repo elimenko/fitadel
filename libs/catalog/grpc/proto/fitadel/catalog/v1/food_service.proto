@@ -27,7 +27,7 @@ message Food {
   optional string brand = 3;
   NutrientBasis basis = 4;
   // Per 100 g or per 100 ml, depending on basis
-  Nutrients per_100 = 5;
+  Nutrients per100 = 5;
 }
 
 enum NutrientBasis {
