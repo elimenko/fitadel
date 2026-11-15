@@ -1,0 +1,11 @@
+version: v2
+plugins:
+  # ts-proto from node_modules, run with node so it works the same on every OS
+  - local: ['node', '../../../node_modules/ts-proto/protoc-gen-ts_proto']
+    out: src/generated
+    opt:
+      # Controller and client interfaces for NestJS's gRPC transport, which
+      # loads the .proto itself, so no encode/decode code is generated
+      - nestJs=true
+      # Controller methods also get the call's metadata (the access token)
+      - addGrpcMetadata=true

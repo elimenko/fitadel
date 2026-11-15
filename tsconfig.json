@@ -26,6 +26,9 @@
     },
     {
       "path": "./libs/shared/http"
+    },
+    {
+      "path": "./libs/catalog/grpc"
     }
   ],
   "compilerOptions": {}
