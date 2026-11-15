@@ -18,6 +18,9 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from 'pg';
+import { type Food, NutrientBasis } from '@fitadel/catalog-grpc';
+import { FakeCatalog, PROTO_DIR } from '@fitadel/catalog-grpc/testing';
+import { type Metadata, status } from '@grpc/grpc-js';
 import {
   FakeIdentity,
   routesOpenWithoutToken,
@@ -158,15 +161,42 @@ describe('database', () => {
       /diary_entry_values_non_negative/,
     );
   });
+
+  it('keeps the food columns of an entry all or nothing', async () => {
+    const insert = (columns: string, values: string) =>
+      query(
+        urls.app,
+        `INSERT INTO diary_entry (user_id, date, meal, kcal, updated_at${columns})
+         VALUES (gen_random_uuid(), '2026-11-15', 'lunch', 300, now()${values})`,
+      );
+    const food = ', food_id, amount, basis, kcal_per_100';
+    await expect(
+      insert(food, ", gen_random_uuid(), 150, 'g', 200"),
+    ).resolves.toEqual([]);
+    // A food without an amount, or a manual entry with a brand
+    await expect(
+      insert(', food_id, basis, kcal_per_100', ", gen_random_uuid(), 'g', 200"),
+    ).rejects.toThrow(/diary_entry_food_all_or_nothing/);
+    await expect(insert(', brand', ", 'Piątnica'")).rejects.toThrow(
+      /diary_entry_food_all_or_nothing/,
+    );
+    await expect(
+      insert(food, ", gen_random_uuid(), 0, 'g', 200"),
+    ).rejects.toThrow(/diary_entry_food_values_valid/);
+  });
 });
 
 let app: INestApplication;
 let identity: FakeIdentity;
+let catalog: FakeCatalog;
 
 describe('service', () => {
   beforeAll(async () => {
     identity = await FakeIdentity.start();
+    catalog = await FakeCatalog.start();
     // Config is validated when AppModule is loaded, so set the env first
+    process.env.CATALOG_GRPC_URL = catalog.url;
+    process.env.CATALOG_PROTO_DIR = PROTO_DIR;
     process.env.DATABASE_URL = urls.app;
     process.env.AUTH_ISSUER = identity.issuer;
     process.env.AUTH_AUDIENCE = identity.audience;
@@ -183,6 +213,7 @@ describe('service', () => {
   afterAll(async () => {
     await app?.close();
     await identity?.stop();
+    await catalog?.stop();
   });
 
   it('is ready with a real database', async () => {
@@ -216,12 +247,14 @@ describe('service', () => {
     method: string,
     path: string,
     body?: unknown,
+    headers: Record<string, string> = {},
   ): Promise<Response> {
     return fetch(`${await app.getUrl()}${path}`, {
       method,
       headers: {
         Authorization: `Bearer ${await identity.token(user)}`,
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        ...headers,
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -424,6 +457,7 @@ describe('service', () => {
     };
 
     const breakfast = {
+      kind: 'manual',
       meal: 'breakfast',
       name: 'Oatmeal',
       kcal: 400,
@@ -455,10 +489,12 @@ describe('service', () => {
       });
       const oatmeal = await logEntry('2026-11-15', breakfast);
       const coffee = await logEntry('2026-11-15', {
+        kind: 'manual',
         meal: 'breakfast',
         kcal: 60,
       });
       await logEntry('2026-11-15', {
+        kind: 'manual',
         meal: 'lunch',
         name: 'Canteen lunch',
         kcal: 750.5,
@@ -509,12 +545,17 @@ describe('service', () => {
         fatG: 50,
         fiberG: 25,
       });
-      await logEntry('2026-11-15', { meal: 'dinner', kcal: 2300 });
+      await logEntry('2026-11-15', {
+        kind: 'manual',
+        meal: 'dinner',
+        kcal: 2300,
+      });
       expect((await day('2026-11-15')).remaining?.kcal).toBe(-300);
     });
 
     it('logs a quick entry with only calories', async () => {
       const response = await api(user, 'POST', '/v1/days/2026-11-15/entries', {
+        kind: 'manual',
         meal: 'snack',
         kcal: 150,
       });
@@ -522,6 +563,7 @@ describe('service', () => {
       expect(response.headers.get('location')).toBe(`/v1/entries/${entry.id}`);
       expect(entry).toEqual({
         id: expect.any(String),
+        kind: 'manual',
         date: '2026-11-15',
         meal: 'snack',
         name: null,
@@ -530,6 +572,7 @@ describe('service', () => {
         fatG: null,
         carbsG: null,
         fiberG: null,
+        food: null,
       });
       expect(
         await (await api(user, 'GET', `/v1/entries/${entry.id}`)).json(),
@@ -538,6 +581,7 @@ describe('service', () => {
 
     it('stores values to one decimal', async () => {
       const entry = await logEntry('2026-11-15', {
+        kind: 'manual',
         meal: 'snack',
         kcal: 100.26,
         proteinG: 3.14,
@@ -597,9 +641,15 @@ describe('service', () => {
     it('rejects invalid entries', async () => {
       const post = (entry: unknown) =>
         api(user, 'POST', '/v1/days/2026-11-15/entries', entry);
-      expect((await post({ meal: 'snack' })).status).toBe(400);
-      expect((await post({ meal: 'brunch', kcal: 100 })).status).toBe(400);
-      expect((await post({ meal: 'snack', kcal: -1 })).status).toBe(400);
+      expect((await post({ kind: 'manual', meal: 'snack' })).status).toBe(400);
+      // Without a kind, the body is neither a manual nor a food entry
+      expect((await post({ meal: 'snack', kcal: 100 })).status).toBe(400);
+      expect(
+        (await post({ kind: 'manual', meal: 'brunch', kcal: 100 })).status,
+      ).toBe(400);
+      expect(
+        (await post({ kind: 'manual', meal: 'snack', kcal: -1 })).status,
+      ).toBe(400);
       expect(
         (await api(user, 'POST', '/v1/days/2026-13-01/entries', breakfast))
           .status,
@@ -607,6 +657,174 @@ describe('service', () => {
       expect((await api(user, 'GET', '/v1/entries/not-an-id')).status).toBe(
         400,
       );
+    });
+
+    describe('food entries', () => {
+      const KEFIR = '0192f8a4-6a3e-7c00-8f00-00000000ce71';
+      const QUARK = '0192f8a4-6a3e-7c00-8f00-000000009a4c';
+      // Protein unknown (unset), fiber a known 0
+      const kefir: Food = {
+        id: KEFIR,
+        name: 'Kefir',
+        brand: 'Piątnica',
+        basis: NutrientBasis.NUTRIENT_BASIS_ML,
+        per100: { kcal: 51, fatG: 2, carbsG: 4.7, fiberG: 0 },
+      };
+      const quark: Food = {
+        id: QUARK,
+        name: 'Twaróg półtłusty',
+        basis: NutrientBasis.NUTRIENT_BASIS_G,
+        per100: { kcal: 133, proteinG: 18, fatG: 4.5, carbsG: 3.6 },
+      };
+
+      beforeEach(() => {
+        catalog.reset();
+        catalog.foods.set(KEFIR, kefir);
+        catalog.foods.set(QUARK, quark);
+      });
+
+      const logFood = (
+        foodId: string,
+        amount: number,
+        headers: Record<string, string> = {},
+      ) =>
+        api(
+          user,
+          'POST',
+          '/v1/days/2026-11-15/entries',
+          { kind: 'food', meal: 'breakfast', foodId, amount },
+          headers,
+        );
+
+      it('logs a food: values for the amount, and a copy of the food', async () => {
+        const response = await logFood(KEFIR, 250, {
+          'Accept-Language': 'en-GB,pl;q=0.8',
+        });
+        expect(response.status).toBe(201);
+        expect(await response.json()).toEqual({
+          id: expect.any(String),
+          kind: 'food',
+          date: '2026-11-15',
+          meal: 'breakfast',
+          name: 'Kefir',
+          kcal: 127.5,
+          proteinG: null,
+          fatG: 5,
+          carbsG: 11.8,
+          fiberG: 0,
+          food: {
+            id: KEFIR,
+            amount: 250,
+            basis: 'ml',
+            brand: 'Piątnica',
+            per100: {
+              kcal: 51,
+              proteinG: null,
+              fatG: 2,
+              carbsG: 4.7,
+              fiberG: 0,
+            },
+          },
+        });
+
+        // Asked on the user's behalf: their token and languages
+        const [call] = catalog.calls;
+        expect(call.request).toEqual({ id: KEFIR, languages: ['en', 'pl'] });
+        expect((call.metadata as Metadata).get('authorization')).toEqual([
+          expect.stringMatching(/^Bearer ey/),
+        ]);
+
+        // An unknown macro makes the day's protein a lower bound
+        expect((await day('2026-11-15')).incomplete).toContain('proteinG');
+      });
+
+      it('keeps the copy when only the amount changes, even if the catalog changed', async () => {
+        const logged = (await (await logFood(QUARK, 200)).json()) as Entry;
+        expect(logged.kcal).toBe(266);
+        catalog.foods.set(QUARK, {
+          ...quark,
+          per100: { kcal: 999, proteinG: 1 },
+        });
+
+        const response = await api(user, 'PUT', `/v1/entries/${logged.id}`, {
+          kind: 'food',
+          date: '2026-11-15',
+          meal: 'lunch',
+          foodId: QUARK,
+          amount: 100,
+        });
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({
+          meal: 'lunch',
+          kcal: 133,
+          proteinG: 18,
+          food: { amount: 100, per100: { kcal: 133 } },
+        });
+        // Only the first logging asked the catalog
+        expect(catalog.calls).toHaveLength(1);
+      });
+
+      it('copies a different food anew, or becomes a manual entry', async () => {
+        const logged = (await (await logFood(QUARK, 200)).json()) as Entry;
+        const put = (body: object) =>
+          api(user, 'PUT', `/v1/entries/${logged.id}`, {
+            date: '2026-11-15',
+            meal: 'breakfast',
+            ...body,
+          });
+
+        const swapped = await put({ kind: 'food', foodId: KEFIR, amount: 100 });
+        expect(await swapped.json()).toMatchObject({
+          name: 'Kefir',
+          kcal: 51,
+          food: { id: KEFIR, basis: 'ml' },
+        });
+        expect(catalog.calls).toHaveLength(2);
+
+        const manual = await put({
+          kind: 'manual',
+          name: 'Leftovers',
+          kcal: 300,
+        });
+        expect(await manual.json()).toMatchObject({
+          kind: 'manual',
+          name: 'Leftovers',
+          kcal: 300,
+          proteinG: null,
+          food: null,
+        });
+      });
+
+      it("answers 422 for a food that doesn't exist or isn't the user's", async () => {
+        const unknown = '0192f8a4-6a3e-7c00-8f00-0000000dead0';
+        const response = await logFood(unknown, 100);
+        expect(response.status).toBe(422);
+        expect(await response.json()).toMatchObject({
+          detail: 'No such food in the catalog',
+          foodId: unknown,
+        });
+      });
+
+      it('tells catalog failures apart, and logs nothing', async () => {
+        catalog.failWith(status.UNAVAILABLE);
+        expect((await logFood(KEFIR, 100)).status).toBe(503);
+        catalog.failWith(status.INTERNAL);
+        expect((await logFood(KEFIR, 100)).status).toBe(502);
+        catalog.answer = () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve({ food: kefir }), 1500),
+          );
+        expect((await logFood(KEFIR, 100)).status).toBe(504);
+
+        expect((await day('2026-11-15')).meals.breakfast.entries).toEqual([]);
+      });
+
+      it('rejects invalid food entries without asking the catalog', async () => {
+        expect((await logFood(KEFIR, 0)).status).toBe(400);
+        expect((await logFood(KEFIR, 5001)).status).toBe(400);
+        expect((await logFood('kefir', 100)).status).toBe(400);
+        expect(catalog.calls).toEqual([]);
+      });
     });
   });
 });
