@@ -21,11 +21,10 @@ import {
 } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ZodResponse } from 'nestjs-zod';
-import { ApiProblem } from '@fitadel/shared-http';
+import { ApiProblem, preferredLanguages } from '@fitadel/shared-http';
 import { CurrentViewer, Public, type Viewer } from '../auth/viewer';
 import { toGtin14 } from './barcode';
 import { CustomFoodService } from './custom-food.service';
-import { preferredLanguages } from './display-name';
 import {
   BarcodeLookupDto,
   BarcodeParamsDto,
