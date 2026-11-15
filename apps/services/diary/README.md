@@ -6,8 +6,8 @@ view needs both ([ADR-0010](../../../docs/adr/0010-goals-and-diary-in-one-servic
 Built with NestJS and Prisma on PostgreSQL, like the catalog.
 
 The features arrive in Phase 3 ([roadmap](../../../docs/roadmap.md)); so far the service
-has goals and manual diary entries, plus its database, health checks and access-token
-checks.
+has goals and diary entries (foods from the catalog, or manual), plus its database,
+health checks and access-token checks.
 
 ## Goals
 
@@ -43,22 +43,44 @@ Dates are calendar dates (`YYYY-MM-DD`) chosen by the client, which knows the us
 ## Diary
 
 An entry is something the user ate on a day, in one of four meals (breakfast, lunch,
-dinner, snack). It stores its values for the whole entry, copied in when it is logged,
-so later changes elsewhere never rewrite the diary. A manual entry needs only `kcal`;
-its name and macros are optional, and an unknown macro is `null`, not `0`.
+dinner, snack). It stores its values for the whole entry, and an unknown macro is
+`null`, not `0`. There are two kinds:
 
-| Route                          | Does                                                    |
-| ------------------------------ | ------------------------------------------------------- |
-| `GET /v1/days/{date}`          | the day: entries by meal, totals, targets and remaining |
-| `POST /v1/days/{date}/entries` | log a manual entry                                      |
-| `GET /v1/entries/{id}`         | one entry                                               |
-| `PUT /v1/entries/{id}`         | replace it; a new `date` or `meal` moves it             |
-| `DELETE /v1/entries/{id}`      | delete it                                               |
+- **food** (`{ kind: 'food', meal, foodId, amount }`): a food from the catalog and the
+  amount eaten, in the food's unit (g or ml). The diary asks the catalog for the food
+  on the user's behalf and keeps a copy of it with the entry: its name (in the user's
+  `Accept-Language`), brand and values per 100. Later changes in the catalog never
+  rewrite the diary; a new amount is computed from the copy, without the catalog.
+- **manual** (`{ kind: 'manual', meal, kcal, … }`): typed in by the user. Only `kcal`
+  is required; the name and macros are optional.
+
+| Route                          | Does                                                                         |
+| ------------------------------ | ---------------------------------------------------------------------------- |
+| `GET /v1/days/{date}`          | the day: entries by meal, totals, targets and remaining                      |
+| `POST /v1/days/{date}/entries` | log a food or a manual entry                                                 |
+| `GET /v1/entries/{id}`         | one entry                                                                    |
+| `PUT /v1/entries/{id}`         | replace it; a new `date` or `meal` moves it; a new `foodId` copies that food |
+| `DELETE /v1/entries/{id}`      | delete it                                                                    |
 
 The day view adds up the day's entries when it is read. `remaining` is the targets of
 the goal in effect minus the totals, negative when over, and `null` without a goal.
 Unknown macros count as nothing, and `incomplete` names them, so the app can show
 "at least 120 g" instead of an exact number.
+
+### The catalog call
+
+Logging a food calls the catalog over gRPC (`CATALOG_GRPC_URL`, ADR-0011), with the
+user's access token, so private foods stay private. The user waits at most 1 s, one
+retry included. Reading the diary never calls the catalog.
+
+| Status | When                                                     |
+| ------ | -------------------------------------------------------- |
+| `422`  | no such food, or someone else's private food             |
+| `503`  | the catalog is unavailable; try again shortly            |
+| `504`  | the catalog didn't answer within the deadline; try again |
+| `502`  | the catalog failed otherwise                             |
+
+The entry isn't logged in any of these cases. Manual entries need no catalog.
 
 ## Running it
 

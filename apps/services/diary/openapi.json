@@ -752,6 +752,14 @@
               "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
               "type": "string"
             }
+          },
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -787,6 +795,46 @@
           },
           "401": {
             "description": "No access token, or an invalid or expired one",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "No such food in the catalog (or someone else's private food)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The catalog failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The catalog is unavailable; try again shortly",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The catalog didn't answer in time; try again",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -880,6 +928,14 @@
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
             }
+          },
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -925,6 +981,46 @@
           },
           "404": {
             "description": "No such entry in your diary",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "No such food in the catalog (or someone else's private food)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The catalog failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The catalog is unavailable; try again shortly",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The catalog didn't answer in time; try again",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1344,6 +1440,10 @@
                           "format": "uuid",
                           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                         },
+                        "kind": {
+                          "type": "string",
+                          "enum": ["manual", "food"]
+                        },
                         "date": {
                           "type": "string",
                           "format": "date",
@@ -1355,6 +1455,7 @@
                           "enum": ["breakfast", "lunch", "dinner", "snack"]
                         },
                         "name": {
+                          "description": "For a food entry, the food's name",
                           "type": ["string", "null"]
                         },
                         "kcal": {
@@ -1375,10 +1476,81 @@
                         "fiberG": {
                           "description": "Grams; null when unknown (not 0)",
                           "type": ["number", "null"]
+                        },
+                        "food": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "amount": {
+                                  "type": "number",
+                                  "description": "In the basis unit"
+                                },
+                                "basis": {
+                                  "type": "string",
+                                  "enum": ["g", "ml"]
+                                },
+                                "brand": {
+                                  "type": ["string", "null"]
+                                },
+                                "per100": {
+                                  "type": "object",
+                                  "properties": {
+                                    "kcal": {
+                                      "type": "number"
+                                    },
+                                    "proteinG": {
+                                      "description": "Grams; null when unknown (not 0)",
+                                      "type": ["number", "null"]
+                                    },
+                                    "fatG": {
+                                      "description": "Grams; null when unknown (not 0)",
+                                      "type": ["number", "null"]
+                                    },
+                                    "carbsG": {
+                                      "description": "Grams; null when unknown (not 0)",
+                                      "type": ["number", "null"]
+                                    },
+                                    "fiberG": {
+                                      "description": "Grams; null when unknown (not 0)",
+                                      "type": ["number", "null"]
+                                    }
+                                  },
+                                  "required": [
+                                    "kcal",
+                                    "proteinG",
+                                    "fatG",
+                                    "carbsG",
+                                    "fiberG"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "amount",
+                                "basis",
+                                "brand",
+                                "per100"
+                              ],
+                              "additionalProperties": false,
+                              "description": "The food as it was when logged; later catalog changes leave it alone"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Null for a manual entry"
                         }
                       },
                       "required": [
                         "id",
+                        "kind",
                         "date",
                         "meal",
                         "name",
@@ -1386,7 +1558,8 @@
                         "proteinG",
                         "fatG",
                         "carbsG",
-                        "fiberG"
+                        "fiberG",
+                        "food"
                       ],
                       "additionalProperties": false,
                       "description": "Something the user ate, with values for the whole entry"
@@ -1438,6 +1611,10 @@
                           "format": "uuid",
                           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                         },
+                        "kind": {
+                          "type": "string",
+                          "enum": ["manual", "food"]
+                        },
                         "date": {
                           "type": "string",
                           "format": "date",
@@ -1449,6 +1626,7 @@
                           "enum": ["breakfast", "lunch", "dinner", "snack"]
                         },
                         "name": {
+                          "description": "For a food entry, the food's name",
                           "type": ["string", "null"]
                         },
                         "kcal": {
@@ -1469,10 +1647,81 @@
                         "fiberG": {
                           "description": "Grams; null when unknown (not 0)",
                           "type": ["number", "null"]
+                        },
+                        "food": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "amount": {
+                                  "type": "number",
+                                  "description": "In the basis unit"
+                                },
+                                "basis": {
+                                  "type": "string",
+                                  "enum": ["g", "ml"]
+                                },
+                                "brand": {
+                                  "type": ["string", "null"]
+                                },
+                                "per100": {
+                                  "type": "object",
+                                  "properties": {
+                                    "kcal": {
+                                      "type": "number"
+                                    },
+                                    "proteinG": {
+                                      "description": "Grams; null when unknown (not 0)",
+                                      "type": ["number", "null"]
+                                    },
+                                    "fatG": {
+                                      "description": "Grams; null when unknown (not 0)",
+                                      "type": ["number", "null"]
+                                    },
+                                    "carbsG": {
+                                      "description": "Grams; null when unknown (not 0)",
+                                      "type": ["number", "null"]
+                                    },
+                                    "fiberG": {
+                                      "description": "Grams; null when unknown (not 0)",
+                                      "type": ["number", "null"]
+                                    }
+                                  },
+                                  "required": [
+                                    "kcal",
+                                    "proteinG",
+                                    "fatG",
+                                    "carbsG",
+                                    "fiberG"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "amount",
+                                "basis",
+                                "brand",
+                                "per100"
+                              ],
+                              "additionalProperties": false,
+                              "description": "The food as it was when logged; later catalog changes leave it alone"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Null for a manual entry"
                         }
                       },
                       "required": [
                         "id",
+                        "kind",
                         "date",
                         "meal",
                         "name",
@@ -1480,7 +1729,8 @@
                         "proteinG",
                         "fatG",
                         "carbsG",
-                        "fiberG"
+                        "fiberG",
+                        "food"
                       ],
                       "additionalProperties": false,
                       "description": "Something the user ate, with values for the whole entry"
@@ -1532,6 +1782,10 @@
                           "format": "uuid",
                           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                         },
+                        "kind": {
+                          "type": "string",
+                          "enum": ["manual", "food"]
+                        },
                         "date": {
                           "type": "string",
                           "format": "date",
@@ -1543,6 +1797,7 @@
                           "enum": ["breakfast", "lunch", "dinner", "snack"]
                         },
                         "name": {
+                          "description": "For a food entry, the food's name",
                           "type": ["string", "null"]
                         },
                         "kcal": {
@@ -1563,10 +1818,81 @@
                         "fiberG": {
                           "description": "Grams; null when unknown (not 0)",
                           "type": ["number", "null"]
+                        },
+                        "food": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "amount": {
+                                  "type": "number",
+                                  "description": "In the basis unit"
+                                },
+                                "basis": {
+                                  "type": "string",
+                                  "enum": ["g", "ml"]
+                                },
+                                "brand": {
+                                  "type": ["string", "null"]
+                                },
+                                "per100": {
+                                  "type": "object",
+                                  "properties": {
+                                    "kcal": {
+                                      "type": "number"
+                                    },
+                                    "proteinG": {
+                                      "description": "Grams; null when unknown (not 0)",
+                                      "type": ["number", "null"]
+                                    },
+                                    "fatG": {
+                                      "description": "Grams; null when unknown (not 0)",
+                                      "type": ["number", "null"]
+                                    },
+                                    "carbsG": {
+                                      "description": "Grams; null when unknown (not 0)",
+                                      "type": ["number", "null"]
+                                    },
+                                    "fiberG": {
+                                      "description": "Grams; null when unknown (not 0)",
+                                      "type": ["number", "null"]
+                                    }
+                                  },
+                                  "required": [
+                                    "kcal",
+                                    "proteinG",
+                                    "fatG",
+                                    "carbsG",
+                                    "fiberG"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "amount",
+                                "basis",
+                                "brand",
+                                "per100"
+                              ],
+                              "additionalProperties": false,
+                              "description": "The food as it was when logged; later catalog changes leave it alone"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Null for a manual entry"
                         }
                       },
                       "required": [
                         "id",
+                        "kind",
                         "date",
                         "meal",
                         "name",
@@ -1574,7 +1900,8 @@
                         "proteinG",
                         "fatG",
                         "carbsG",
-                        "fiberG"
+                        "fiberG",
+                        "food"
                       ],
                       "additionalProperties": false,
                       "description": "Something the user ate, with values for the whole entry"
@@ -1626,6 +1953,10 @@
                           "format": "uuid",
                           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                         },
+                        "kind": {
+                          "type": "string",
+                          "enum": ["manual", "food"]
+                        },
                         "date": {
                           "type": "string",
                           "format": "date",
@@ -1637,6 +1968,7 @@
                           "enum": ["breakfast", "lunch", "dinner", "snack"]
                         },
                         "name": {
+                          "description": "For a food entry, the food's name",
                           "type": ["string", "null"]
                         },
                         "kcal": {
@@ -1657,10 +1989,81 @@
                         "fiberG": {
                           "description": "Grams; null when unknown (not 0)",
                           "type": ["number", "null"]
+                        },
+                        "food": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "amount": {
+                                  "type": "number",
+                                  "description": "In the basis unit"
+                                },
+                                "basis": {
+                                  "type": "string",
+                                  "enum": ["g", "ml"]
+                                },
+                                "brand": {
+                                  "type": ["string", "null"]
+                                },
+                                "per100": {
+                                  "type": "object",
+                                  "properties": {
+                                    "kcal": {
+                                      "type": "number"
+                                    },
+                                    "proteinG": {
+                                      "description": "Grams; null when unknown (not 0)",
+                                      "type": ["number", "null"]
+                                    },
+                                    "fatG": {
+                                      "description": "Grams; null when unknown (not 0)",
+                                      "type": ["number", "null"]
+                                    },
+                                    "carbsG": {
+                                      "description": "Grams; null when unknown (not 0)",
+                                      "type": ["number", "null"]
+                                    },
+                                    "fiberG": {
+                                      "description": "Grams; null when unknown (not 0)",
+                                      "type": ["number", "null"]
+                                    }
+                                  },
+                                  "required": [
+                                    "kcal",
+                                    "proteinG",
+                                    "fatG",
+                                    "carbsG",
+                                    "fiberG"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "amount",
+                                "basis",
+                                "brand",
+                                "per100"
+                              ],
+                              "additionalProperties": false,
+                              "description": "The food as it was when logged; later catalog changes leave it alone"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Null for a manual entry"
                         }
                       },
                       "required": [
                         "id",
+                        "kind",
                         "date",
                         "meal",
                         "name",
@@ -1668,7 +2071,8 @@
                         "proteinG",
                         "fatG",
                         "carbsG",
-                        "fiberG"
+                        "fiberG",
+                        "food"
                       ],
                       "additionalProperties": false,
                       "description": "Something the user ate, with values for the whole entry"
@@ -1815,89 +2219,123 @@
         "additionalProperties": false
       },
       "CreateEntryDto": {
-        "type": "object",
-        "properties": {
-          "meal": {
-            "type": "string",
-            "enum": ["breakfast", "lunch", "dinner", "snack"]
-          },
-          "name": {
-            "default": null,
-            "description": "e.g. \"Lunch at work\"; optional",
-            "anyOf": [
-              {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
                 "type": "string",
-                "minLength": 1,
-                "maxLength": 200
+                "const": "manual"
               },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "kcal": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 10000
-          },
-          "proteinG": {
-            "default": null,
-            "description": "Grams for the whole entry; null or omitted when unknown",
-            "anyOf": [
-              {
+              "meal": {
+                "type": "string",
+                "enum": ["breakfast", "lunch", "dinner", "snack"]
+              },
+              "name": {
+                "default": null,
+                "description": "e.g. \"Lunch at work\"; optional",
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "kcal": {
                 "type": "number",
                 "minimum": 0,
-                "maximum": 1000
+                "maximum": 10000
               },
-              {
-                "type": "null"
+              "proteinG": {
+                "default": null,
+                "description": "Grams for the whole entry; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fatG": {
+                "default": null,
+                "description": "Grams for the whole entry; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "carbsG": {
+                "default": null,
+                "description": "Grams for the whole entry; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fiberG": {
+                "default": null,
+                "description": "Grams for the whole entry; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
-            ]
+            },
+            "required": ["kind", "meal", "kcal"]
           },
-          "fatG": {
-            "default": null,
-            "description": "Grams for the whole entry; null or omitted when unknown",
-            "anyOf": [
-              {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 1000
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "food"
               },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "carbsG": {
-            "default": null,
-            "description": "Grams for the whole entry; null or omitted when unknown",
-            "anyOf": [
-              {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 1000
+              "meal": {
+                "type": "string",
+                "enum": ["breakfast", "lunch", "dinner", "snack"]
               },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "fiberG": {
-            "default": null,
-            "description": "Grams for the whole entry; null or omitted when unknown",
-            "anyOf": [
-              {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 1000
+              "foodId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "A food from the catalog"
               },
-              {
-                "type": "null"
+              "amount": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 5000,
+                "description": "In the food's basis unit: grams or millilitres"
               }
-            ]
+            },
+            "required": ["kind", "meal", "foodId", "amount"]
           }
-        },
-        "required": ["meal", "kcal"],
+        ],
         "description": "Values are stored to one decimal"
       },
       "EntryDto_Output": {
@@ -1907,6 +2345,10 @@
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["manual", "food"]
           },
           "date": {
             "type": "string",
@@ -1919,6 +2361,7 @@
             "enum": ["breakfast", "lunch", "dinner", "snack"]
           },
           "name": {
+            "description": "For a food entry, the food's name",
             "type": "array",
             "items": {
               "type": "string"
@@ -1954,10 +2397,75 @@
             "items": {
               "type": "number"
             }
+          },
+          "food": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "description": "In the basis unit"
+                  },
+                  "basis": {
+                    "type": "string",
+                    "enum": ["g", "ml"]
+                  },
+                  "brand": {
+                    "type": ["string", "null"]
+                  },
+                  "per100": {
+                    "type": "object",
+                    "properties": {
+                      "kcal": {
+                        "type": "number"
+                      },
+                      "proteinG": {
+                        "description": "Grams; null when unknown (not 0)",
+                        "type": ["number", "null"]
+                      },
+                      "fatG": {
+                        "description": "Grams; null when unknown (not 0)",
+                        "type": ["number", "null"]
+                      },
+                      "carbsG": {
+                        "description": "Grams; null when unknown (not 0)",
+                        "type": ["number", "null"]
+                      },
+                      "fiberG": {
+                        "description": "Grams; null when unknown (not 0)",
+                        "type": ["number", "null"]
+                      }
+                    },
+                    "required": [
+                      "kcal",
+                      "proteinG",
+                      "fatG",
+                      "carbsG",
+                      "fiberG"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["id", "amount", "basis", "brand", "per100"],
+                "additionalProperties": false,
+                "description": "The food as it was when logged; later catalog changes leave it alone"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for a manual entry"
           }
         },
         "required": [
           "id",
+          "kind",
           "date",
           "meal",
           "name",
@@ -1965,101 +2473,142 @@
           "proteinG",
           "fatG",
           "carbsG",
-          "fiberG"
+          "fiberG",
+          "food"
         ],
         "description": "Something the user ate, with values for the whole entry",
         "additionalProperties": false
       },
       "ReplaceEntryDto": {
-        "type": "object",
-        "properties": {
-          "meal": {
-            "type": "string",
-            "enum": ["breakfast", "lunch", "dinner", "snack"]
-          },
-          "name": {
-            "default": null,
-            "description": "e.g. \"Lunch at work\"; optional",
-            "anyOf": [
-              {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
                 "type": "string",
-                "minLength": 1,
-                "maxLength": 200
+                "const": "manual"
               },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "kcal": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 10000
-          },
-          "proteinG": {
-            "default": null,
-            "description": "Grams for the whole entry; null or omitted when unknown",
-            "anyOf": [
-              {
+              "meal": {
+                "type": "string",
+                "enum": ["breakfast", "lunch", "dinner", "snack"]
+              },
+              "name": {
+                "default": null,
+                "description": "e.g. \"Lunch at work\"; optional",
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "kcal": {
                 "type": "number",
                 "minimum": 0,
-                "maximum": 1000
+                "maximum": 10000
               },
-              {
-                "type": "null"
+              "proteinG": {
+                "default": null,
+                "description": "Grams for the whole entry; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fatG": {
+                "default": null,
+                "description": "Grams for the whole entry; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "carbsG": {
+                "default": null,
+                "description": "Grams for the whole entry; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fiberG": {
+                "default": null,
+                "description": "Grams for the whole entry; null or omitted when unknown",
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "date": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                "description": "A calendar date, YYYY-MM-DD"
               }
-            ]
+            },
+            "required": ["kind", "meal", "kcal", "date"]
           },
-          "fatG": {
-            "default": null,
-            "description": "Grams for the whole entry; null or omitted when unknown",
-            "anyOf": [
-              {
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "food"
+              },
+              "meal": {
+                "type": "string",
+                "enum": ["breakfast", "lunch", "dinner", "snack"]
+              },
+              "foodId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "A food from the catalog"
+              },
+              "amount": {
                 "type": "number",
-                "minimum": 0,
-                "maximum": 1000
+                "exclusiveMinimum": 0,
+                "maximum": 5000,
+                "description": "In the food's basis unit: grams or millilitres"
               },
-              {
-                "type": "null"
+              "date": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                "description": "A calendar date, YYYY-MM-DD"
               }
-            ]
-          },
-          "carbsG": {
-            "default": null,
-            "description": "Grams for the whole entry; null or omitted when unknown",
-            "anyOf": [
-              {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 1000
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "fiberG": {
-            "default": null,
-            "description": "Grams for the whole entry; null or omitted when unknown",
-            "anyOf": [
-              {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 1000
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "date": {
-            "type": "string",
-            "format": "date",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
-            "description": "A calendar date, YYYY-MM-DD"
+            },
+            "required": ["kind", "meal", "foodId", "amount", "date"]
           }
-        },
-        "required": ["meal", "kcal", "date"]
+        ]
       }
     }
   }
