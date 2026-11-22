@@ -8,6 +8,10 @@ import {
   type OnBehalfOf,
 } from '../catalog/catalog-foods';
 import { GoalService } from '../goal/goal.service';
+import {
+  type Answer,
+  IdempotencyService,
+} from '../idempotency/idempotency.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { summarizeDay, sumValues } from './day-summary';
 import {
@@ -63,6 +67,7 @@ export class EntryService {
     private readonly prisma: PrismaService,
     private readonly goals: GoalService,
     private readonly catalog: CatalogFoods,
+    private readonly idempotency: IdempotencyService,
   ) {}
 
   /** The day's entries by meal, with totals against the goal in effect */
@@ -101,21 +106,32 @@ export class EntryService {
     return row && toEntry(row);
   }
 
-  /** A food entry asks the catalog for the food, on the user's behalf */
+  /**
+   * A food entry asks the catalog for the food, on the user's behalf. A retry with the
+   * same Idempotency-Key gets the first answer, before any catalog call.
+   */
   async create(
     userId: string,
     date: string,
     entry: NewEntry,
     user: OnBehalfOf,
-  ): Promise<Entry> {
+    key?: string,
+  ): Promise<Answer<Entry>> {
+    const keyed = { userId, key, request: ['create', date, entry] };
+    const replayed = await this.idempotency.replay<Entry>(keyed);
+    if (replayed) return replayed;
+
     const data =
       entry.kind === 'manual'
         ? manualColumns(entry)
         : foodColumns(entry, await this.snapshotOf(entry.foodId, user));
-    const row = await this.prisma.diaryEntry.create({
-      data: { userId, date: toDbDate(date), ...data },
-    });
-    return toEntry(row);
+    return this.idempotency.save(keyed, 201, async (db) =>
+      toEntry(
+        await db.diaryEntry.create({
+          data: { userId, date: toDbDate(date), ...data },
+        }),
+      ),
+    );
   }
 
   /**
@@ -154,15 +170,23 @@ export class EntryService {
 
   /**
    * Copies entries of the user's diary to a day, all or none. Every copy goes into one
-   * INSERT, and a single statement is atomic, so no transaction is needed: the sources
-   * are read first, and a source deleted in between is still copied as it was read.
-   * A copy keeps its source's values and food copy, so the catalog isn't asked.
+   * INSERT, and a single statement is atomic; the only transaction is the one that
+   * stores an Idempotency-Key with it. The sources are read first, and a source deleted
+   * in between is still copied as it was read. A copy keeps its source's values and
+   * food copy, so the catalog isn't asked. A retry with the same key gets the first
+   * answer, even if the sources are gone by then.
    */
   async copy(
     userId: string,
     date: string,
-    { entryIds, meal }: CopyEntries,
-  ): Promise<Entry[]> {
+    copies: CopyEntries,
+    key?: string,
+  ): Promise<Answer<Entry[]>> {
+    const keyed = { userId, key, request: ['copy', date, copies] };
+    const replayed = await this.idempotency.replay<Entry[]>(keyed);
+    if (replayed) return replayed;
+
+    const { entryIds, meal } = copies;
     const sources = await this.prisma.diaryEntry.findMany({
       where: { userId, id: { in: entryIds } },
     });
@@ -177,11 +201,13 @@ export class EntryService {
 
     const order = (id: string) => entryIds.indexOf(id);
     sources.sort((a, b) => order(a.id) - order(b.id));
-    const rows = await this.prisma.diaryEntry.createManyAndReturn({
-      data: sources.map((source) => copyOf(source, toDbDate(date), meal)),
+    return this.idempotency.save(keyed, 201, async (db) => {
+      const rows = await db.diaryEntry.createManyAndReturn({
+        data: sources.map((source) => copyOf(source, toDbDate(date), meal)),
+      });
+      // uuidv7 ids follow the order the rows were inserted in, the order asked
+      return rows.sort((a, b) => (a.id < b.id ? -1 : 1)).map(toEntry);
     });
-    // uuidv7 ids follow the order the rows were inserted in, which is the order asked
-    return rows.sort((a, b) => (a.id < b.id ? -1 : 1)).map(toEntry);
   }
 
   /** False when the user has no such entry */

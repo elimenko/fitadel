@@ -97,3 +97,23 @@ model DiaryEntry {
   @@index([userId, date])
   @@map("diary_entry")
 }
+
+/// A POST's Idempotency-Key and its first answer: a retry with the same key gets that
+/// answer again instead of writing twice. Kept for a day.
+model IdempotencyKey {
+  /// Keys are per user: one user's key never replays another user's answer
+  userId      String   @map("user_id") @db.Uuid
+  key         String   @db.VarChar(64)
+  /// sha256 of the route and the validated request: the same key for another request
+  /// is refused
+  fingerprint String   @db.Char(64)
+  status      Int      @db.SmallInt
+  /// The answer's body, replayed as it was
+  body        Json
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@id([userId, key])
+  // The hourly cleanup deletes by age
+  @@index([createdAt])
+  @@map("idempotency_key")
+}

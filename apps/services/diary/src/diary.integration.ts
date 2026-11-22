@@ -28,6 +28,7 @@ import {
 import { configureHttp, type ProblemDetails } from '@fitadel/shared-http';
 import type { Day, Entry } from './day/day.dto';
 import type { Goal } from './goal/goal.dto';
+import { IdempotencyService } from './idempotency/idempotency.service';
 
 const workspaceRoot = join(__dirname, '../../../..');
 const projectRoot = join(__dirname, '..');
@@ -954,6 +955,200 @@ describe('service', () => {
         expect((await copy('2026-11-16', { entryIds: ids(50) })).status).toBe(
           422,
         );
+      });
+    });
+
+    describe('Idempotency-Key', () => {
+      const OATS = '0192f8a4-6a3e-7c00-8f00-0000000000a7';
+      const oats: Food = {
+        id: OATS,
+        name: 'Oat flakes',
+        basis: NutrientBasis.NUTRIENT_BASIS_G,
+        per100: { kcal: 372, proteinG: 13, fatG: 7, carbsG: 59, fiberG: 10 },
+      };
+      const apple = { kind: 'manual', meal: 'snack', name: 'Apple', kcal: 80 };
+
+      beforeEach(() => {
+        catalog.reset();
+        catalog.foods.set(OATS, oats);
+      });
+
+      const post = (path: string, body: unknown, key: string, asUser = user) =>
+        api(asUser, 'POST', path, body, { 'Idempotency-Key': key });
+      const log = (body: unknown, key: string, asUser = user) =>
+        post('/v1/days/2026-11-22/entries', body, key, asUser);
+      const entriesOn = async (date: string, asUser = user) =>
+        Object.values((await day(date, asUser)).meals).flatMap(
+          (meal) => meal.entries,
+        );
+
+      it('answers a retry with the first answer, and writes once', async () => {
+        const key = randomUUID();
+        const first = await log(apple, key);
+        const retry = await log(apple, key);
+
+        expect(first.status).toBe(201);
+        expect(retry.status).toBe(201);
+        expect(first.headers.get('idempotent-replayed')).toBeNull();
+        expect(retry.headers.get('idempotent-replayed')).toBe('true');
+        const entry = (await first.json()) as Entry;
+        expect(await retry.json()).toEqual(entry);
+        expect(retry.headers.get('location')).toBe(`/v1/entries/${entry.id}`);
+        expect(await entriesOn('2026-11-22')).toEqual([entry]);
+
+        // Without a key, every POST is a new entry
+        await api(user, 'POST', '/v1/days/2026-11-22/entries', apple);
+        await api(user, 'POST', '/v1/days/2026-11-22/entries', apple);
+        expect(await entriesOn('2026-11-22')).toHaveLength(3);
+      });
+
+      it('keeps keys per user', async () => {
+        const key = randomUUID();
+        const other = randomUUID();
+        const mine = (await (await log(apple, key)).json()) as Entry;
+        const response = await log(apple, key, other);
+        expect(response.headers.get('idempotent-replayed')).toBeNull();
+        expect(((await response.json()) as Entry).id).not.toBe(mine.id);
+        expect(await entriesOn('2026-11-22', other)).toHaveLength(1);
+      });
+
+      it('refuses the same key for a different request', async () => {
+        const key = randomUUID();
+        const entry = (await (await log(apple, key)).json()) as Entry;
+        const refused = [
+          await log({ ...apple, kcal: 90 }, key),
+          await post('/v1/days/2026-11-23/entries', apple, key),
+          await post(
+            '/v1/days/2026-11-22/entries/copies',
+            { entryIds: [entry.id] },
+            key,
+          ),
+        ];
+        for (const response of refused) {
+          expect(response.status).toBe(422);
+          expect(await response.json()).toMatchObject({
+            detail: 'This Idempotency-Key was used for a different request',
+          });
+        }
+        expect(await entriesOn('2026-11-22')).toHaveLength(1);
+      });
+
+      it('stores only successes: a retry after a failure runs again', async () => {
+        const key = randomUUID();
+        const oatmeal = {
+          kind: 'food',
+          meal: 'breakfast',
+          foodId: OATS,
+          amount: 60,
+        };
+        catalog.failWith(status.UNAVAILABLE);
+        expect((await log(oatmeal, key)).status).toBe(503);
+
+        catalog.reset();
+        catalog.foods.set(OATS, oats);
+        const retry = await log(oatmeal, key);
+        expect(retry.status).toBe(201);
+        expect(retry.headers.get('idempotent-replayed')).toBeNull();
+        expect(await entriesOn('2026-11-22')).toHaveLength(1);
+      });
+
+      it('writes once when the same request arrives twice at the same time', async () => {
+        // Both requests check for the key before the slow catalog call, so both find
+        // none and both write: only the key, stored in the same transaction, stops
+        // the second
+        catalog.answer = () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve({ food: oats }), 300),
+          );
+        const key = randomUUID();
+        const oatmeal = {
+          kind: 'food',
+          meal: 'breakfast',
+          foodId: OATS,
+          amount: 60,
+        };
+
+        const responses = await Promise.all([
+          log(oatmeal, key),
+          log(oatmeal, key),
+        ]);
+        expect(responses.map((response) => response.status)).toEqual([
+          201, 201,
+        ]);
+        expect(
+          responses
+            .map((response) => response.headers.get('idempotent-replayed'))
+            .sort(),
+        ).toEqual(['true', null].sort());
+        const [a, b] = (await Promise.all(
+          responses.map((response) => response.json()),
+        )) as Entry[];
+        expect(a).toEqual(b);
+        expect(await entriesOn('2026-11-22')).toEqual([a]);
+        expect(catalog.calls).toHaveLength(2);
+      });
+
+      it('replays a copy, even after its sources are gone', async () => {
+        const source = await logEntry('2026-11-22', apple);
+        const key = randomUUID();
+        const body = { entryIds: [source.id], meal: 'lunch' };
+        const first = await post(
+          '/v1/days/2026-11-23/entries/copies',
+          body,
+          key,
+        );
+        expect(first.status).toBe(201);
+        await api(user, 'DELETE', `/v1/entries/${source.id}`);
+
+        const retry = await post(
+          '/v1/days/2026-11-23/entries/copies',
+          body,
+          key,
+        );
+        expect(retry.status).toBe(201);
+        expect(retry.headers.get('idempotent-replayed')).toBe('true');
+        expect(await retry.json()).toEqual(await first.json());
+        expect(await entriesOn('2026-11-23')).toHaveLength(1);
+      });
+
+      it('forgets a key after a day', async () => {
+        const key = randomUUID();
+        await log(apple, key);
+        const age = () =>
+          query(
+            urls.app,
+            `UPDATE idempotency_key SET created_at = now() - interval '25 hours'
+             WHERE key = '${key}'`,
+          );
+        await age();
+
+        const later = await log(apple, key);
+        expect(later.status).toBe(201);
+        expect(later.headers.get('idempotent-replayed')).toBeNull();
+        expect(await entriesOn('2026-11-22')).toHaveLength(2);
+
+        // The hourly cleanup deletes expired keys
+        await age();
+        expect(
+          await app.get(IdempotencyService).deleteExpired(),
+        ).toBeGreaterThan(0);
+        expect(
+          await query(
+            urls.app,
+            `SELECT 1 FROM idempotency_key WHERE key = '${key}'`,
+          ),
+        ).toEqual([]);
+      });
+
+      it('rejects an invalid key', async () => {
+        for (const key of ['a'.repeat(65), 'two words']) {
+          const response = await log(apple, key);
+          expect(response.status).toBe(400);
+          expect(await response.json()).toMatchObject({
+            detail: 'Idempotency-Key must be 1 to 64 visible ASCII characters',
+          });
+        }
+        expect(await entriesOn('2026-11-22')).toEqual([]);
       });
     });
   });
