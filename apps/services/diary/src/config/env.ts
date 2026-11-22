@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { eventsEnvShape } from '@fitadel/diary-events';
 
 /** Environment variables the service reads. Values arrive as strings and are parsed here. */
 export const envSchema = z.object({
@@ -30,6 +31,8 @@ export const envSchema = z.object({
    * tests point it at libs/catalog/grpc/proto.
    */
   CATALOG_PROTO_DIR: z.string().min(1).optional(),
+  /** FoodLogged events through the outbox to Kafka (ADR-0012), and where Kafka is */
+  ...eventsEnvShape,
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -7,6 +7,7 @@ import {
   CatalogFoods,
   type OnBehalfOf,
 } from '../catalog/catalog-foods';
+import { DiaryEvents } from '../events/diary-events';
 import { GoalService } from '../goal/goal.service';
 import {
   type Answer,
@@ -68,6 +69,7 @@ export class EntryService {
     private readonly goals: GoalService,
     private readonly catalog: CatalogFoods,
     private readonly idempotency: IdempotencyService,
+    private readonly events: DiaryEvents,
   ) {}
 
   /** The day's entries by meal, with totals against the goal in effect */
@@ -125,13 +127,13 @@ export class EntryService {
       entry.kind === 'manual'
         ? manualColumns(entry)
         : foodColumns(entry, await this.snapshotOf(entry.foodId, user));
-    return this.idempotency.save(keyed, 201, async (db) =>
-      toEntry(
-        await db.diaryEntry.create({
-          data: { userId, date: toDbDate(date), ...data },
-        }),
-      ),
-    );
+    return this.idempotency.save(keyed, 201, async (db) => {
+      const row = await db.diaryEntry.create({
+        data: { userId, date: toDbDate(date), ...data },
+      });
+      await this.events.foodsLogged(db, loggedFoods([row]));
+      return toEntry(row);
+    });
   }
 
   /**
@@ -205,6 +207,7 @@ export class EntryService {
       const rows = await db.diaryEntry.createManyAndReturn({
         data: sources.map((source) => copyOf(source, toDbDate(date), meal)),
       });
+      await this.events.foodsLogged(db, loggedFoods(rows));
       // uuidv7 ids follow the order the rows were inserted in, the order asked
       return rows.sort((a, b) => (a.id < b.id ? -1 : 1)).map(toEntry);
     });
@@ -288,6 +291,15 @@ function copyOf(
     carbsPer100: source.carbsPer100,
     fiberPer100: source.fiberPer100,
   };
+}
+
+/** The food entries among new rows, for FoodLogged; manual entries have no food */
+function loggedFoods(rows: DiaryEntry[]) {
+  return rows.flatMap((row) =>
+    row.foodId === null
+      ? []
+      : [{ foodId: row.foodId, loggedAt: row.createdAt }],
+  );
 }
 
 /** The copy of the food stored with a food entry; null for a manual one */

@@ -12,7 +12,28 @@ describe('validateEnv', () => {
       AUTH_ISSUER: 'http://localhost:8080/oidc',
       AUTH_AUDIENCE: 'https://api.fitadel.local',
       CATALOG_GRPC_URL: 'localhost:50051',
+      EVENTS_ENABLED: false,
+      KAFKA_BROKERS: ['localhost:9092'],
     });
+  });
+
+  it('turns events on, with a list of brokers', () => {
+    expect(
+      validateEnv({
+        DATABASE_URL,
+        EVENTS_ENABLED: 'true',
+        KAFKA_BROKERS: 'kafka-0:9092, kafka-1:9092',
+      }),
+    ).toMatchObject({
+      EVENTS_ENABLED: true,
+      KAFKA_BROKERS: ['kafka-0:9092', 'kafka-1:9092'],
+    });
+    expect(() =>
+      validateEnv({ DATABASE_URL, EVENTS_ENABLED: 'maybe' }),
+    ).toThrow(/EVENTS_ENABLED/);
+    expect(() =>
+      validateEnv({ DATABASE_URL, KAFKA_BROKERS: 'kafka://kafka-0' }),
+    ).toThrow(/KAFKA_BROKERS/);
   });
 
   it('takes the catalog address as host:port', () => {

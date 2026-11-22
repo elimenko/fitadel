@@ -20,6 +20,7 @@ import { join } from 'node:path';
 import { Client } from 'pg';
 import { type Food, NutrientBasis } from '@fitadel/catalog-grpc';
 import { FakeCatalog, PROTO_DIR } from '@fitadel/catalog-grpc/testing';
+import { TestKafka } from '@fitadel/diary-events/testing';
 import { type Metadata, status } from '@grpc/grpc-js';
 import {
   FakeIdentity,
@@ -190,11 +191,17 @@ describe('database', () => {
 let app: INestApplication;
 let identity: FakeIdentity;
 let catalog: FakeCatalog;
+let kafka: TestKafka;
 
 describe('service', () => {
   beforeAll(async () => {
-    identity = await FakeIdentity.start();
-    catalog = await FakeCatalog.start();
+    [identity, catalog, kafka] = await Promise.all([
+      FakeIdentity.start(),
+      FakeCatalog.start(),
+      TestKafka.start(),
+    ]);
+    process.env.EVENTS_ENABLED = 'true';
+    process.env.KAFKA_BROKERS = kafka.brokers.join(',');
     // Config is validated when AppModule is loaded, so set the env first
     process.env.CATALOG_GRPC_URL = catalog.url;
     process.env.CATALOG_PROTO_DIR = PROTO_DIR;
@@ -215,6 +222,7 @@ describe('service', () => {
     await app?.close();
     await identity?.stop();
     await catalog?.stop();
+    await kafka?.stop();
   });
 
   it('is ready with a real database', async () => {
@@ -1149,6 +1157,140 @@ describe('service', () => {
           });
         }
         expect(await entriesOn('2026-11-22')).toEqual([]);
+      });
+    });
+
+    describe('events', () => {
+      /** A food of its own per test: events on the shared topic are told apart by it */
+      const newFood = (): string => {
+        const id = randomUUID();
+        catalog.foods.set(id, {
+          id,
+          name: 'Buckwheat',
+          basis: NutrientBasis.NUTRIENT_BASIS_G,
+          per100: {
+            kcal: 343,
+            proteinG: 13,
+            fatG: 3.4,
+            carbsG: 62,
+            fiberG: 10,
+          },
+        });
+        return id;
+      };
+      const food = (foodId: string) => ({
+        kind: 'food',
+        meal: 'dinner',
+        foodId,
+        amount: 80,
+      });
+      const outbox = (foodId: string) =>
+        query(
+          urls.app,
+          `SELECT id, published_at FROM outbox_event WHERE key = '${foodId}'`,
+        ) as Promise<{ id: string; published_at: Date | null }[]>;
+
+      beforeEach(() => catalog.reset());
+
+      it('publishes a logged food to Kafka, keyed by the food', async () => {
+        const foodId = newFood();
+        const entry = await logEntry('2026-11-22', food(foodId));
+
+        const [received, ...more] = await kafka.foodLogged(
+          1,
+          (event) => event.foodId === foodId,
+        );
+        expect(more).toEqual([]);
+        expect(received.key).toBe(foodId);
+        expect(received.event.loggedAt).toBeInstanceOf(Date);
+        // The event's id is its outbox row's, now marked as sent
+        const [row] = await outbox(foodId);
+        expect(received.event.eventId).toBe(row.id);
+        expect(row.published_at).not.toBeNull();
+        expect(entry.food?.id).toBe(foodId);
+      });
+
+      it('records nothing for manual entries, replays and failed logs', async () => {
+        const before = await query(
+          urls.app,
+          'SELECT count(*)::int AS n FROM outbox_event',
+        );
+        await logEntry('2026-11-22', breakfast);
+
+        const replayed = newFood();
+        const key = randomUUID();
+        const once = () =>
+          api(user, 'POST', '/v1/days/2026-11-22/entries', food(replayed), {
+            'Idempotency-Key': key,
+          });
+        expect((await once()).status).toBe(201);
+        expect((await once()).status).toBe(201);
+
+        const failed = newFood();
+        catalog.failWith(status.UNAVAILABLE);
+        expect(
+          (await api(user, 'POST', '/v1/days/2026-11-22/entries', food(failed)))
+            .status,
+        ).toBe(503);
+
+        const after = await query(
+          urls.app,
+          'SELECT count(*)::int AS n FROM outbox_event',
+        );
+        expect(after[0].n - before[0].n).toBe(1);
+        expect(await outbox(failed)).toEqual([]);
+        expect(
+          await kafka.foodLogged(1, (event) => event.foodId === replayed),
+        ).toHaveLength(1);
+      });
+
+      it('publishes one event per copied food entry', async () => {
+        const foodId = newFood();
+        const logged = await logEntry('2026-11-22', food(foodId));
+        const manual = await logEntry('2026-11-22', breakfast);
+        const response = await api(
+          user,
+          'POST',
+          '/v1/days/2026-11-23/entries/copies',
+          {
+            entryIds: [logged.id, manual.id],
+          },
+        );
+        expect(response.status).toBe(201);
+
+        // The logging and the copy; the manual entry has no food
+        const received = await kafka.foodLogged(
+          2,
+          (event) => event.foodId === foodId,
+        );
+        expect(received).toHaveLength(2);
+        expect(new Set(received.map((r) => r.event.eventId)).size).toBe(2);
+      });
+
+      it('keeps events while Kafka is down, and publishes them when it is back', async () => {
+        const foodId = newFood();
+        kafka.stopBroker();
+        try {
+          const started = Date.now();
+          await logEntry('2026-11-22', food(foodId));
+          // Logging never waits for Kafka
+          expect(Date.now() - started).toBeLessThan(2_000);
+          // Longer than the relay's send deadline: a send to the stopped broker hangs
+          // until the relay gives up on it and discards its producer
+          await new Promise((resolve) => setTimeout(resolve, 6_500));
+          expect(await outbox(foodId)).toEqual([
+            { id: expect.any(String), published_at: null },
+          ]);
+        } finally {
+          await kafka.startBroker();
+        }
+        const received = await kafka.foodLogged(
+          1,
+          (event) => event.foodId === foodId,
+          45_000,
+        );
+        expect(received).toHaveLength(1);
+        expect((await outbox(foodId))[0].published_at).not.toBeNull();
       });
     });
   });

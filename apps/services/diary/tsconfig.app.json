@@ -36,6 +36,9 @@
       "path": "../../../libs/shared/auth/tsconfig.lib.json"
     },
     {
+      "path": "../../../libs/diary/events/tsconfig.lib.json"
+    },
+    {
       "path": "../../../libs/catalog/grpc/tsconfig.lib.json"
     }
   ]
