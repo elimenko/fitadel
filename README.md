@@ -50,6 +50,8 @@ docker compose down     # stop; add -v to also delete the data volumes
 
 Grafana runs at http://localhost:3001, with traces (Tempo), metrics (Prometheus)
 and logs (Loki) from the services. Mailpit's inbox is at http://localhost:8025.
+Kafka, for events between services ([ADR-0012](docs/adr/0012-kafka-events-with-outbox.md)),
+listens on `localhost:9092`; `kafka-init` creates its topics and exits.
 
 The gateway at http://localhost:8080 is the one entry point for clients: identity's
 pages under `/oidc`, `/interaction`, `/verify-email` and `/reset-password`, and each API
