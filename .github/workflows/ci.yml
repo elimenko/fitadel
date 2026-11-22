@@ -41,8 +41,8 @@ jobs:
       - run: pnpm nx sync:check
       - run: pnpm nx affected -t lint test typecheck build proto-breaking --output-style=static
 
-      # The committed gRPC code must match the .proto contracts
-      - name: Check that the generated gRPC code is up to date
+      # The committed code must match the .proto contracts (gRPC and events)
+      - name: Check that the generated Protobuf code is up to date
         run: |
           pnpm nx run-many -t proto-generate --skip-nx-cache --output-style=static
           changes=$(git status --porcelain -- ':(glob)libs/**/src/generated/**')

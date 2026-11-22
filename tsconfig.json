@@ -29,6 +29,9 @@
     },
     {
       "path": "./libs/catalog/grpc"
+    },
+    {
+      "path": "./libs/diary/events"
     }
   ],
   "compilerOptions": {}

@@ -1,0 +1,73 @@
+{
+  "name": "@fitadel/diary-events",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "nx": {
+    "name": "diary-events",
+    "tags": [
+      "platform:node"
+    ],
+    "targets": {
+      "proto-generate": {
+        "command": "buf generate",
+        "options": {
+          "cwd": "{projectRoot}"
+        },
+        "cache": true,
+        "inputs": [
+          "{projectRoot}/proto/**/*",
+          "{projectRoot}/buf.yaml",
+          "{projectRoot}/buf.gen.yaml",
+          {
+            "externalDependencies": [
+              "ts-proto",
+              "@bufbuild/buf"
+            ]
+          }
+        ],
+        "outputs": [
+          "{projectRoot}/src/generated"
+        ]
+      },
+      "proto-lint": {
+        "command": "buf lint",
+        "options": {
+          "cwd": "{projectRoot}"
+        },
+        "cache": true,
+        "inputs": [
+          "{projectRoot}/proto/**/*",
+          "{projectRoot}/buf.yaml",
+          {
+            "externalDependencies": [
+              "@bufbuild/buf"
+            ]
+          }
+        ]
+      },
+      "proto-breaking": {
+        "command": "node ../../../tools/proto/check-breaking.mjs",
+        "options": {
+          "cwd": "{projectRoot}"
+        }
+      },
+      "lint": {
+        "dependsOn": [
+          "proto-lint"
+        ]
+      }
+    }
+  },
+  "dependencies": {}
+}

@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package fitadel.diary.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// A food entry was logged in someone's diary: a new entry or a copy (ADR-0012). It
+// carries no user: consumers learn what is logged, not who logs it. Published to the
+// topic diary.food-logged, keyed by food_id.
+message FoodLogged {
+  // The diary's outbox row id, a UUIDv7: consumers skip an event_id they have seen
+  string event_id = 1;
+  // The catalog food the entry is of
+  string food_id = 2;
+  // When the entry was logged
+  google.protobuf.Timestamp logged_at = 3;
+}
