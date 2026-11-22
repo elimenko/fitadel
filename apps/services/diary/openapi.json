@@ -852,6 +852,82 @@
         "tags": ["diary"]
       }
     },
+    "/v1/days/{date}/entries/copies": {
+      "post": {
+        "operationId": "DayController_copy_v1",
+        "parameters": [
+          {
+            "name": "date",
+            "required": true,
+            "in": "path",
+            "description": "A calendar date, YYYY-MM-DD",
+            "schema": {
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyEntriesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Copied, all of them, with the values of the sources",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CopiedEntriesDto_Output"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ids, meal or date; 1 to 50 entries, each once",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No access token, or an invalid or expired one",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Some entries are not in your diary; nothing was copied",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["diary"]
+      }
+    },
     "/v1/entries/{id}": {
       "get": {
         "operationId": "EntryController_get_v1",
@@ -2477,6 +2553,165 @@
           "food"
         ],
         "description": "Something the user ate, with values for the whole entry",
+        "additionalProperties": false
+      },
+      "CopyEntriesDto": {
+        "type": "object",
+        "properties": {
+          "entryIds": {
+            "minItems": 1,
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "description": "Entries of your diary, from any day, each once; copied in this order"
+          },
+          "meal": {
+            "description": "Every copy goes into this meal; when omitted, each keeps its own",
+            "type": "string",
+            "enum": ["breakfast", "lunch", "dinner", "snack"]
+          }
+        },
+        "required": ["entryIds"]
+      },
+      "CopiedEntriesDto_Output": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": ["manual", "food"]
+                },
+                "date": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                  "description": "A calendar date, YYYY-MM-DD"
+                },
+                "meal": {
+                  "type": "string",
+                  "enum": ["breakfast", "lunch", "dinner", "snack"]
+                },
+                "name": {
+                  "description": "For a food entry, the food's name",
+                  "type": ["string", "null"]
+                },
+                "kcal": {
+                  "type": "number"
+                },
+                "proteinG": {
+                  "description": "Grams; null when unknown (not 0)",
+                  "type": ["number", "null"]
+                },
+                "fatG": {
+                  "description": "Grams; null when unknown (not 0)",
+                  "type": ["number", "null"]
+                },
+                "carbsG": {
+                  "description": "Grams; null when unknown (not 0)",
+                  "type": ["number", "null"]
+                },
+                "fiberG": {
+                  "description": "Grams; null when unknown (not 0)",
+                  "type": ["number", "null"]
+                },
+                "food": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "amount": {
+                          "type": "number",
+                          "description": "In the basis unit"
+                        },
+                        "basis": {
+                          "type": "string",
+                          "enum": ["g", "ml"]
+                        },
+                        "brand": {
+                          "type": ["string", "null"]
+                        },
+                        "per100": {
+                          "type": "object",
+                          "properties": {
+                            "kcal": {
+                              "type": "number"
+                            },
+                            "proteinG": {
+                              "description": "Grams; null when unknown (not 0)",
+                              "type": ["number", "null"]
+                            },
+                            "fatG": {
+                              "description": "Grams; null when unknown (not 0)",
+                              "type": ["number", "null"]
+                            },
+                            "carbsG": {
+                              "description": "Grams; null when unknown (not 0)",
+                              "type": ["number", "null"]
+                            },
+                            "fiberG": {
+                              "description": "Grams; null when unknown (not 0)",
+                              "type": ["number", "null"]
+                            }
+                          },
+                          "required": [
+                            "kcal",
+                            "proteinG",
+                            "fatG",
+                            "carbsG",
+                            "fiberG"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": ["id", "amount", "basis", "brand", "per100"],
+                      "additionalProperties": false,
+                      "description": "The food as it was when logged; later catalog changes leave it alone"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Null for a manual entry"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "date",
+                "meal",
+                "name",
+                "kcal",
+                "proteinG",
+                "fatG",
+                "carbsG",
+                "fiberG",
+                "food"
+              ],
+              "additionalProperties": false,
+              "description": "Something the user ate, with values for the whole entry"
+            },
+            "description": "The copies, in the order asked"
+          }
+        },
+        "required": ["entries"],
         "additionalProperties": false
       },
       "ReplaceEntryDto": {

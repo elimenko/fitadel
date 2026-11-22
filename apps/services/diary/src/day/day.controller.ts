@@ -19,11 +19,14 @@ import { ApiProblem, preferredLanguages } from '@fitadel/shared-http';
 import type { OnBehalfOf } from '../catalog/catalog-foods';
 import { SignedInViewer, type Viewer } from '../auth/viewer';
 import {
+  CopiedEntriesDto,
+  CopyEntriesDto,
   CreateEntryDto,
   DayDto,
   DayParamsDto,
   EntryDto,
   EntryIdParamsDto,
+  MAX_COPIES,
   ReplaceEntryDto,
 } from './day.dto';
 import { EntryService } from './entry.service';
@@ -89,6 +92,25 @@ export class DayController {
     );
     response.location(`/v1/entries/${created.id}`);
     return created;
+  }
+
+  @Post(':date/entries/copies')
+  @ZodResponse({
+    status: 201,
+    type: CopiedEntriesDto,
+    description: 'Copied, all of them, with the values of the sources',
+  })
+  @ApiProblem(
+    400,
+    `Invalid ids, meal or date; 1 to ${MAX_COPIES} entries, each once`,
+  )
+  @ApiProblem(422, 'Some entries are not in your diary; nothing was copied')
+  async copy(
+    @Param() { date }: DayParamsDto,
+    @Body() copies: CopyEntriesDto,
+    @SignedInViewer() viewer: Viewer,
+  ) {
+    return { entries: await this.entries.copy(viewer.id, date, copies) };
   }
 }
 
