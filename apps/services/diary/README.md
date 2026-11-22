@@ -6,8 +6,8 @@ view needs both ([ADR-0010](../../../docs/adr/0010-goals-and-diary-in-one-servic
 Built with NestJS and Prisma on PostgreSQL, like the catalog.
 
 The features arrive in Phase 3 ([roadmap](../../../docs/roadmap.md)); so far the service
-has goals and diary entries (foods from the catalog, or manual), plus its database,
-health checks and access-token checks.
+has goals and diary entries (foods from the catalog, or manual), events to Kafka, plus
+its database, health checks and access-token checks.
 
 ## Goals
 
@@ -103,6 +103,28 @@ retry included. Reading the diary never calls the catalog.
 | `502`  | the catalog failed otherwise                             |
 
 The entry isn't logged in any of these cases. Manual entries need no catalog.
+
+## Events
+
+Logging a food entry, or copying one, publishes `FoodLogged` (food id and time, no
+user) to Kafka's `diary.food-logged` topic, for the catalog's counts
+([ADR-0012](../../../docs/adr/0012-kafka-events-with-outbox.md),
+[contract](../../../libs/diary/events/README.md)). Manual entries and replayed
+requests publish nothing.
+
+- **Outbox:** the event is written to `outbox_event` in the same transaction as the
+  entry, so both commit or neither does. Logging never talks to Kafka.
+- **Relay:** in the service, every 500 ms it claims up to 100 unsent rows
+  (`FOR UPDATE SKIP LOCKED`, so replicas never send the same row at once), publishes
+  them and marks them sent. A send gets 5 s; while Kafka is down it retries, backing
+  off up to 30 s, and events wait in the outbox. Sent rows are deleted after a day.
+- **At least once:** a crash between publishing and marking publishes again, so
+  consumers must skip events they have seen.
+- **Off switch:** `EVENTS_ENABLED=false` (the default when unset) records nothing and
+  starts no relay or Kafka client. Events only feed hints, so the diary works the same.
+
+Health checks don't involve Kafka. Unsent events, to see a backlog:
+`SELECT count(*), min(created_at) FROM outbox_event WHERE published_at IS NULL;`
 
 ## Running it
 

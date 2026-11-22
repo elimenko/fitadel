@@ -561,9 +561,15 @@ importers:
 
   apps/services/diary:
     dependencies:
+      '@bufbuild/protobuf':
+        specifier: 2.16.0
+        version: 2.16.0
       '@fitadel/catalog-grpc':
         specifier: workspace:*
         version: link:../../../libs/catalog/grpc
+      '@fitadel/diary-events':
+        specifier: workspace:*
+        version: link:../../../libs/diary/events
       '@fitadel/shared-auth':
         specifier: workspace:*
         version: link:../../../libs/shared/auth
@@ -624,6 +630,9 @@ importers:
       '@opentelemetry/sdk-node':
         specifier: 0.300.0
         version: 0.300.0(@opentelemetry/api@1.10.0)(supports-color@7.2.0)
+      '@platformatic/kafka':
+        specifier: 2.15.0
+        version: 2.15.0(supports-color@7.2.0)
       '@prisma/adapter-pg':
         specifier: 7.10.1
         version: 7.10.1

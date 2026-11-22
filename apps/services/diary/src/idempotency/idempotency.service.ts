@@ -7,14 +7,11 @@ import {
 } from '@nestjs/common';
 import { ProblemException } from '@fitadel/shared-http';
 import { Prisma } from '../generated/prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { type Db, PrismaService } from '../prisma/prisma.service';
 
 /** How long a key is remembered: retries come within minutes, so a day is generous */
 export const KEEP_MS = 24 * 60 * 60 * 1000;
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
-
-/** A database client: the service's own, or a transaction's */
-export type Db = Prisma.TransactionClient;
 
 /** A POST that may carry an Idempotency-Key */
 export interface Keyed {
@@ -64,10 +61,11 @@ export class IdempotencyService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Writes, and stores the answer under the key, in one transaction: both or neither.
-   * The key is inserted last. If a request with the same key got there first, this
-   * insert waits until that one commits and then fails as a duplicate; the whole
-   * transaction, entries included, rolls back, and the first answer is replayed.
+   * Writes in one transaction: everything the write adds (entries and their events)
+   * and, with a key, the answer stored under it. Both or neither. The key is inserted
+   * last. If a request with the same key got there first, this insert waits until
+   * that one commits and then fails as a duplicate; the whole transaction rolls back,
+   * and the first answer is replayed.
    */
   async save<T>(
     keyed: Keyed,
@@ -75,16 +73,16 @@ export class IdempotencyService implements OnModuleInit, OnModuleDestroy {
     write: (db: Db) => Promise<T>,
   ): Promise<Answer<T>> {
     const { userId, key } = keyed;
-    if (key === undefined) {
-      return { status, body: await write(this.prisma), replayed: false };
+    if (key !== undefined) {
+      // An expired key is a new one: make room for it
+      await this.prisma.idempotencyKey.deleteMany({
+        where: { userId, key, createdAt: { lt: expiry(new Date()) } },
+      });
     }
-    // An expired key is a new one: make room for it
-    await this.prisma.idempotencyKey.deleteMany({
-      where: { userId, key, createdAt: { lt: expiry(new Date()) } },
-    });
     try {
       return await this.prisma.$transaction(async (tx) => {
         const body = await write(tx);
+        if (key === undefined) return { status, body, replayed: false };
         await tx.idempotencyKey.create({
           data: {
             userId,
@@ -97,7 +95,7 @@ export class IdempotencyService implements OnModuleInit, OnModuleDestroy {
         return { status, body, replayed: false };
       });
     } catch (error) {
-      if (!isDuplicateKey(error)) throw error;
+      if (key === undefined || !isDuplicateKey(error)) throw error;
       const first = await this.replay<T>(keyed);
       if (!first) throw error;
       return first;

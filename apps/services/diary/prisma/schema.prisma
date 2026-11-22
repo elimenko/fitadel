@@ -1,10 +1,12 @@
 // Diary data model: goals (daily calorie budget and macro targets) and diary entries.
 // Hand-written SQL in the migrations adds what Prisma can't express: CHECK constraints.
+// The outbox carries events to Kafka (ADR-0012).
 
 generator client {
-  provider     = "prisma-client"
-  output       = "../src/generated/prisma"
-  moduleFormat = "cjs"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  moduleFormat    = "cjs"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -116,4 +118,24 @@ model IdempotencyKey {
   // The hourly cleanup deletes by age
   @@index([createdAt])
   @@map("idempotency_key")
+}
+
+/// Events waiting to be published to Kafka, written in the same transaction as the
+/// change they announce, so both commit or neither does (ADR-0012). The relay publishes
+/// unsent rows and marks them; sent rows are deleted after a day.
+model OutboxEvent {
+  /// The event's id (a UUIDv7, made by the service because the payload carries it)
+  id          String    @id @db.Uuid
+  topic       String
+  /// The Kafka message key: one key's events stay in one partition, in order
+  key         String
+  /// The encoded Protobuf message
+  payload     Bytes
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  /// Null until the relay has published it
+  publishedAt DateTime? @map("published_at") @db.Timestamptz
+
+  // The relay's query looks at unsent rows only: the index stays as small as the backlog
+  @@index([id], map: "outbox_event_unpublished_idx", where: raw("published_at IS NULL"))
+  @@map("outbox_event")
 }
