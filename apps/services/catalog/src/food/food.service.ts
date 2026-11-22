@@ -76,7 +76,7 @@ export class FoodService {
     // A barcode matches only a handful of rows: fetch them all, rank in code
     const rows = await this.prisma.food.findMany({
       where: { barcode, retiredAt: null, ...visibleTo(viewer) },
-      include: { servings: true },
+      include: { servings: true, logCount: true },
     });
     const [best, ...alternatives] = rankBarcodeMatches(
       rows,

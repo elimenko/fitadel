@@ -10,7 +10,7 @@ import {
   type StartedPostgreSqlContainer,
 } from '@testcontainers/postgresql';
 import { execFileSync, spawn } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
@@ -24,6 +24,11 @@ import {
   catalogGrpcOptions,
   createFoodServiceClient,
 } from '@fitadel/catalog-grpc';
+import { FoodLogged } from '@fitadel/diary-events';
+import { Consumer } from '@platformatic/kafka';
+import { FoodLoggedConsumer } from './events/food-logged.consumer';
+import { PrismaService } from './prisma/prisma.service';
+import { TestKafka } from '@fitadel/diary-events/testing';
 import { type ServiceError, Metadata, status } from '@grpc/grpc-js';
 import { generateKeyPair } from 'jose';
 import { Client, Pool } from 'pg';
@@ -330,14 +335,20 @@ let identity: FakeIdentity;
 describe('service', () => {
   let app: INestApplication;
   let grpcAddress: string;
+  let kafka: TestKafka;
 
   beforeAll(async () => {
     await new Promise<void>((resolve) =>
       fakeOff.server.listen(0, '127.0.0.1', resolve),
     );
     const { port } = fakeOff.server.address() as { port: number };
-    identity = await FakeIdentity.start();
+    [identity, kafka] = await Promise.all([
+      FakeIdentity.start(),
+      TestKafka.start(),
+    ]);
     // Config is validated when AppModule is loaded, so set the env first
+    process.env.EVENTS_ENABLED = 'true';
+    process.env.KAFKA_BROKERS = kafka.brokers.join(',');
     process.env.DATABASE_URL = urls.app;
     process.env.OFF_API_URL = `http://127.0.0.1:${port}`;
     process.env.OFF_TIMEOUT_MS = '300';
@@ -361,6 +372,7 @@ describe('service', () => {
     await app?.close();
     await new Promise((resolve) => fakeOff.server.close(resolve));
     await identity?.stop();
+    await kafka?.stop();
   });
 
   it('is ready with a real database', async () => {
@@ -1006,6 +1018,124 @@ describe('service', () => {
       expect((await search('q=mleko&limit=500')).response.status).toBe(400);
     });
   });
+
+  describe("the diary's FoodLogged events", () => {
+    const sql = async <T>(text: string, values: unknown[] = []) => {
+      const client = new Client({ connectionString: urls.app });
+      await client.connect();
+      try {
+        return (await client.query(text, values)).rows as T[];
+      } finally {
+        await client.end();
+      }
+    };
+    /** An imported food with this barcode (normalized, 14 digits) */
+    const insertFood = async (barcode: string, popularity: number) => {
+      const [row] = await sql<{ id: string }>(
+        `INSERT INTO food (source, source_ref, barcode, names, kcal, popularity, updated_at)
+         VALUES ('off', $1, $2, '{"pl": "Kasza gryczana"}', 343, $3, now())
+         RETURNING id`,
+        [randomUUID(), barcode, popularity],
+      );
+      return row.id;
+    };
+    const event = (foodId: string, eventId = randomUUID()) => ({
+      eventId,
+      foodId,
+      loggedAt: new Date(),
+    });
+    const encoded = (e: FoodLogged) => FoodLogged.encode(e).finish();
+    const countOf = async (foodId: string) =>
+      (
+        await sql<{ count: number }>(
+          'SELECT count FROM food_log_count WHERE food_id = $1',
+          [foodId],
+        )
+      )[0]?.count ?? 0;
+    const processed = async (eventId: string) =>
+      (
+        await sql('SELECT 1 FROM processed_event WHERE event_id = $1', [
+          eventId,
+        ])
+      ).length > 0;
+    /** Waits until the consumer has processed the event */
+    const processedEventually = async (eventId: string) => {
+      const deadline = Date.now() + 20_000;
+      while (!(await processed(eventId))) {
+        if (Date.now() > deadline)
+          throw new Error(`${eventId} never processed`);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+    };
+
+    it('counts each event once, even when it arrives twice', async () => {
+      const foodId = await insertFood('04006381333931', 0);
+      const twice = event(foodId);
+      const marker = event(foodId);
+      // One key: one partition, read in this order
+      await kafka.publish([
+        { key: foodId, value: encoded(twice) },
+        { key: foodId, value: encoded(twice) },
+        { key: foodId, value: encoded(marker) },
+      ]);
+      await processedEventually(marker.eventId);
+      expect(await countOf(foodId)).toBe(2);
+    });
+
+    it("skips messages it can't use, and keeps going", async () => {
+      const foodId = await insertFood('04006381333948', 0);
+      const unknownFood = event(randomUUID());
+      const valid = event(foodId);
+      const key = randomUUID();
+      await kafka.publish([
+        { key, value: new Uint8Array([0xff, 0xff, 0xff]) },
+        { key, value: encoded({ ...valid, eventId: 'not-a-uuid' }) },
+        { key, value: encoded(unknownFood) },
+        { key, value: encoded(valid) },
+      ]);
+      await processedEventually(valid.eventId);
+      expect(await countOf(foodId)).toBe(1);
+      // Recorded as processed, so a redelivery is skipped quickly too
+      expect(await processed(unknownFood.eventId)).toBe(true);
+    });
+
+    it('stops promptly when Kafka is unreachable', async () => {
+      // What happens on SIGTERM (onModuleDestroy), with nothing listening on port 9
+      const consumer = new FoodLoggedConsumer(
+        app.get(PrismaService),
+        () =>
+          new Consumer({
+            clientId: 'catalog-test',
+            groupId: `catalog-test-${randomUUID()}`,
+            bootstrapBrokers: ['127.0.0.1:9'],
+          }),
+      );
+      consumer.onApplicationBootstrap();
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      const started = Date.now();
+      await consumer.onModuleDestroy();
+      expect(Date.now() - started).toBeLessThan(5_000);
+    });
+
+    it("ranks a barcode's matches by logs in Fitadel, then popularity", async () => {
+      const popular = await insertFood('04006381333955', 100);
+      const logged = await insertFood('04006381333955', 1);
+      const best = async () => {
+        const response = await fetch(
+          `${await app.getUrl()}/v1/foods/barcode/4006381333955`,
+        );
+        return ((await response.json()) as BarcodeLookupDto).food.id;
+      };
+      expect(await best()).toBe(popular);
+
+      const events = [event(logged), event(logged)];
+      await kafka.publish(
+        events.map((e) => ({ key: logged, value: encoded(e) })),
+      );
+      await processedEventually(events[1].eventId);
+      expect(await best()).toBe(logged);
+    });
+  });
 });
 
 /** A port that is free right now (the OS picks it). */
@@ -1038,6 +1168,9 @@ onPosix('shutdown', () => {
           // Telemetry on, with no collector listening (port 9 refuses): shutdown must
           // still exit cleanly when the collector is unreachable
           OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:9',
+          // Events on, with no Kafka listening: the same for the consumer
+          EVENTS_ENABLED: 'true',
+          KAFKA_BROKERS: '127.0.0.1:9',
         },
       },
     );

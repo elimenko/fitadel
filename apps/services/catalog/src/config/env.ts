@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { eventsEnvShape } from '@fitadel/diary-events';
 
 /** Environment variables the service reads. Values arrive as strings and are parsed here. */
 export const envSchema = z.object({
@@ -32,6 +33,8 @@ export const envSchema = z.object({
    * cluster it can be identity's internal address instead of the public one.
    */
   AUTH_JWKS_URI: z.url().optional(),
+  /** Counting logged foods from the diary's events (ADR-0012), and where Kafka is */
+  ...eventsEnvShape,
 });
 
 export type Env = z.infer<typeof envSchema>;

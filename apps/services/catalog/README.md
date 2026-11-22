@@ -38,8 +38,9 @@ GTIN-14) and stores and compares it as GTIN-14. A wrong check digit is a `400`: 
 was probably mistyped.
 
 1. **The catalog.** Every visible food with that barcode, best first: the user's own
-   private copy, then a community food, then imported ones (most scanned first). The
-   best one is returned, the rest as `alternatives`.
+   private copy, then a community food, then imported ones. Within each, the food
+   logged most often in Fitadel comes first, then the one scanned most at Open Food
+   Facts. The best one is returned, the rest as `alternatives`.
 2. **Open Food Facts, live** (only when the catalog has none). The export lacks products
    the API has. A usable product goes through the same cleaning rules as the import and
    is stored, so the next scan is a database hit. The call gives up after
@@ -122,6 +123,33 @@ found.
 | `INVALID_ARGUMENT` | the id is not a UUID                                   |
 | `UNAUTHENTICATED`  | a token that isn't valid (never treated as "no token") |
 | `UNAVAILABLE`      | identity's signing keys can't be fetched; try again    |
+
+## Events from the diary
+
+The catalog counts how often each food is logged in Fitadel, from the diary's
+`FoodLogged` events in Kafka
+([ADR-0012](../../../docs/adr/0012-kafka-events-with-outbox.md),
+[contract](../../../libs/diary/events/README.md)), in `food_log_count`. The count ranks
+barcode matches; `popularity` stays what Open Food Facts reports.
+
+- **Consumer group `catalog`:** a new group starts at the topic's beginning; after
+  that, from its committed offsets. An offset is committed only after the count's
+  transaction, so a crash redelivers the event.
+- **Each event once:** delivery is at least once, so the event's id goes into
+  `processed_event` in the same transaction as the count, and an id seen before is
+  skipped. Ids are kept 7 days (Kafka's default retention), then deleted hourly.
+- **Skipped, with a warning:** a message that isn't a `FoodLogged`, and an event for a
+  food the catalog doesn't have. They can't succeed later, and retrying them would stop
+  the partition behind them.
+- **Off switch:** `EVENTS_ENABLED=false` (the default when unset) starts no consumer
+  and needs no Kafka; counts stop growing, nothing else changes.
+
+Health checks don't involve Kafka. The group's lag, events not yet counted:
+
+```sh
+docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server localhost:9092 --describe --group catalog
+```
 
 ## Database access
 

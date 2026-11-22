@@ -6,6 +6,7 @@ const food = (name: string, match: Partial<BarcodeMatch>) => ({
   visibility: 'public' as const,
   ownerId: null,
   popularity: 0,
+  logCount: null,
   ...match,
 });
 
@@ -25,6 +26,20 @@ describe('rankBarcodeMatches', () => {
     expect(
       names(rankBarcodeMatches([quietOff, popularOff, community, mine], 'u1')),
     ).toEqual(['my copy', 'community', 'popular OFF', 'quiet OFF']);
+  });
+
+  it('puts the food logged most in Fitadel first, before popularity', () => {
+    const loggedOff = food('logged OFF', {
+      popularity: 1,
+      logCount: { count: 3 },
+    });
+    expect(
+      names(rankBarcodeMatches([popularOff, loggedOff, quietOff], null)),
+    ).toEqual(['logged OFF', 'popular OFF', 'quiet OFF']);
+    // Never above the viewer's own copy
+    expect(names(rankBarcodeMatches([loggedOff, mine], 'u1'))[0]).toBe(
+      'my copy',
+    );
   });
 
   it("treats someone else's private copy like any user food", () => {
