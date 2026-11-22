@@ -1,0 +1,9 @@
+version: v2
+plugins:
+  # ts-proto from node_modules, run with node so it works the same on every OS
+  - local: ['node', '../../../node_modules/ts-proto/protoc-gen-ts_proto']
+    out: src/generated
+    opt:
+      # Only binary encode/decode: messages go to Kafka as Protobuf bytes
+      - outputJsonMethods=false
+      - outputPartialMethods=false
