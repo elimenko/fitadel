@@ -29,17 +29,22 @@ import {
   MAX_COPIES,
   ReplaceEntryDto,
 } from './day.dto';
+import {
+  ApiIdempotencyKey,
+  IdempotencyKey,
+  send,
+} from '../idempotency/idempotency-key';
 import { EntryService } from './entry.service';
 
 const NO_TOKEN = 'No access token, or an invalid or expired one';
 
+const NO_FOOD = "No such food in the catalog (or someone else's private food)";
+const KEY_REUSED = 'or the Idempotency-Key was used for a different request';
+
 /** Food entries copy a food from the catalog: the errors of that call (ADR-0011) */
-const ApiCatalogProblems = () =>
+const ApiCatalogProblems = (unprocessable = NO_FOOD) =>
   applyDecorators(
-    ApiProblem(
-      422,
-      "No such food in the catalog (or someone else's private food)",
-    ),
+    ApiProblem(422, unprocessable),
     ApiProblem(502, 'The catalog failed'),
     ApiProblem(503, 'The catalog is unavailable; try again shortly'),
     ApiProblem(504, "The catalog didn't answer in time; try again"),
@@ -74,21 +79,27 @@ export class DayController {
     type: EntryDto,
     description: 'Created; the Location header points to it',
   })
-  @ApiProblem(400, 'Invalid fields or date')
-  @ApiCatalogProblems()
+  @ApiProblem(400, 'Invalid fields, date or Idempotency-Key')
+  @ApiCatalogProblems(`${NO_FOOD}, ${KEY_REUSED}`)
+  @ApiIdempotencyKey()
   async create(
     @Param() { date }: DayParamsDto,
     @Body() entry: CreateEntryDto,
     @SignedInViewer() viewer: Viewer,
     @Headers('authorization') authorization: string,
     @Headers('accept-language') acceptLanguage: string | undefined,
+    @IdempotencyKey() key: string | undefined,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const created = await this.entries.create(
-      viewer.id,
-      date,
-      entry,
-      onBehalfOf(authorization, acceptLanguage),
+    const created = send(
+      response,
+      await this.entries.create(
+        viewer.id,
+        date,
+        entry,
+        onBehalfOf(authorization, acceptLanguage),
+        key,
+      ),
     );
     response.location(`/v1/entries/${created.id}`);
     return created;
@@ -102,15 +113,25 @@ export class DayController {
   })
   @ApiProblem(
     400,
-    `Invalid ids, meal or date; 1 to ${MAX_COPIES} entries, each once`,
+    `Invalid ids, meal, date or Idempotency-Key; 1 to ${MAX_COPIES} entries, each once`,
   )
-  @ApiProblem(422, 'Some entries are not in your diary; nothing was copied')
+  @ApiProblem(
+    422,
+    `Some entries are not in your diary (nothing was copied), ${KEY_REUSED}`,
+  )
+  @ApiIdempotencyKey()
   async copy(
     @Param() { date }: DayParamsDto,
     @Body() copies: CopyEntriesDto,
     @SignedInViewer() viewer: Viewer,
+    @IdempotencyKey() key: string | undefined,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return { entries: await this.entries.copy(viewer.id, date, copies) };
+    const entries = send(
+      response,
+      await this.entries.copy(viewer.id, date, copies, key),
+    );
+    return { entries };
   }
 }
 

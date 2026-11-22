@@ -76,6 +76,19 @@ values of its source, and a food entry keeps its copy of the food, so copying ne
 calls the catalog. It is all or nothing: if any id isn't one of the user's entries, the
 answer is `422` with those ids, and nothing is copied.
 
+### Retries: `Idempotency-Key`
+
+A POST that times out may still have been logged, and a plain retry would log it
+twice. Both POSTs accept an `Idempotency-Key` header: a unique value per intent (a UUID,
+up to 64 characters), sent again with every retry of it. Within a day, a retry with the
+key gets the first answer again, with `Idempotent-Replayed: true`, and writes nothing,
+even if the entry has changed since. The key and the entries are stored in one
+transaction, so two identical requests at the same moment still write once.
+
+- Keys are per user; the same key for a different request answers `422`.
+- Only successful answers are stored: a retry after `503` really retries.
+- Without the header, every POST writes. Expired keys are deleted hourly.
+
 ### The catalog call
 
 Logging a food calls the catalog over gRPC (`CATALOG_GRPC_URL`, ADR-0011), with the

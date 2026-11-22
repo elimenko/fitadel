@@ -760,6 +760,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A unique value per intent (a UUID), sent again with every retry: a retry within a day gets the first answer, with `Idempotent-Replayed: true`, and writes nothing",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            }
           }
         ],
         "requestBody": {
@@ -784,7 +794,7 @@
             }
           },
           "400": {
-            "description": "Invalid fields or date",
+            "description": "Invalid fields, date or Idempotency-Key",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -804,7 +814,7 @@
             }
           },
           "422": {
-            "description": "No such food in the catalog (or someone else's private food)",
+            "description": "No such food in the catalog (or someone else's private food), or the Idempotency-Key was used for a different request",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -866,6 +876,16 @@
               "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A unique value per intent (a UUID), sent again with every retry: a retry within a day gets the first answer, with `Idempotent-Replayed: true`, and writes nothing",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            }
           }
         ],
         "requestBody": {
@@ -890,7 +910,7 @@
             }
           },
           "400": {
-            "description": "Invalid ids, meal or date; 1 to 50 entries, each once",
+            "description": "Invalid ids, meal, date or Idempotency-Key; 1 to 50 entries, each once",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -910,7 +930,7 @@
             }
           },
           "422": {
-            "description": "Some entries are not in your diary; nothing was copied",
+            "description": "Some entries are not in your diary (nothing was copied), or the Idempotency-Key was used for a different request",
             "content": {
               "application/problem+json": {
                 "schema": {
