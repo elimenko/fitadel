@@ -826,5 +826,135 @@ describe('service', () => {
         expect(catalog.calls).toEqual([]);
       });
     });
+
+    describe('copying entries', () => {
+      const snack = { kind: 'manual', meal: 'snack', name: 'Apple', kcal: 80 };
+
+      const copy = (date: string, body: unknown, asUser = user) =>
+        api(asUser, 'POST', `/v1/days/${date}/entries/copies`, body);
+
+      it('copies entries to another day, each into its own meal, in the order asked', async () => {
+        const oatmeal = await logEntry('2026-11-15', breakfast);
+        const apple = await logEntry('2026-11-15', snack);
+
+        const response = await copy('2026-11-16', {
+          entryIds: [apple.id, oatmeal.id],
+        });
+        expect(response.status).toBe(201);
+        const { entries } = (await response.json()) as { entries: Entry[] };
+        expect(entries).toEqual([
+          { ...apple, id: expect.any(String), date: '2026-11-16' },
+          { ...oatmeal, id: expect.any(String), date: '2026-11-16' },
+        ]);
+        expect(entries.map((entry) => entry.id)).not.toContain(apple.id);
+
+        const copied = await day('2026-11-16');
+        expect(copied.meals.breakfast.entries).toEqual([entries[1]]);
+        expect(copied.meals.snack.entries).toEqual([entries[0]]);
+        // The sources stay where they were
+        expect((await day('2026-11-15')).totals.kcal).toBe(480);
+      });
+
+      it('copies a whole meal into another meal', async () => {
+        const first = await logEntry('2026-11-15', breakfast);
+        const second = await logEntry('2026-11-15', snack);
+        const { meals } = await day('2026-11-15');
+        expect(meals.breakfast.entries).toHaveLength(1);
+
+        const response = await copy('2026-11-15', {
+          entryIds: [first.id, second.id],
+          meal: 'lunch',
+        });
+        expect(response.status).toBe(201);
+        const lunch = (await day('2026-11-15')).meals.lunch;
+        expect(lunch.entries.map((entry) => entry.name)).toEqual([
+          'Oatmeal',
+          'Apple',
+        ]);
+        expect(lunch.totals.kcal).toBe(480);
+      });
+
+      it('copies a food entry with its copy of the food, without the catalog', async () => {
+        const RYE = '0192f8a4-6a3e-7c00-8f00-00000000a1e0';
+        catalog.reset();
+        catalog.foods.set(RYE, {
+          id: RYE,
+          name: 'Rye bread',
+          basis: NutrientBasis.NUTRIENT_BASIS_G,
+          per100: {
+            kcal: 259,
+            proteinG: 8.5,
+            fatG: 3.3,
+            carbsG: 48,
+            fiberG: 5.8,
+          },
+        });
+        const logged = await logEntry('2026-11-15', {
+          kind: 'food',
+          meal: 'breakfast',
+          foodId: RYE,
+          amount: 70,
+        });
+        // The catalog changes, then fails: the copy needs neither
+        catalog.foods.set(RYE, {
+          id: RYE,
+          name: 'Rye bread, new recipe',
+          basis: NutrientBasis.NUTRIENT_BASIS_G,
+          per100: { kcal: 300 },
+        });
+        catalog.failWith(status.UNAVAILABLE);
+        const callsBefore = catalog.calls.length;
+
+        const response = await copy('2026-11-16', { entryIds: [logged.id] });
+        expect(response.status).toBe(201);
+        const { entries } = (await response.json()) as { entries: Entry[] };
+        expect(entries).toEqual([
+          { ...logged, id: expect.any(String), date: '2026-11-16' },
+        ]);
+        expect(catalog.calls).toHaveLength(callsBefore);
+      });
+
+      it("copies nothing when some entry isn't the user's", async () => {
+        const mine = await logEntry('2026-11-15', breakfast);
+        const other = randomUUID();
+        const theirs = (await (
+          await api(other, 'POST', '/v1/days/2026-11-15/entries', snack)
+        ).json()) as Entry;
+        const unknown = randomUUID();
+
+        const response = await copy('2026-11-16', {
+          entryIds: [mine.id, theirs.id, unknown],
+        });
+        expect(response.status).toBe(422);
+        expect(await response.json()).toMatchObject({
+          detail: 'No such entries in your diary',
+          entryIds: [theirs.id, unknown],
+        });
+        expect((await day('2026-11-16')).totals.kcal).toBe(0);
+      });
+
+      it('rejects invalid copies', async () => {
+        const entry = await logEntry('2026-11-15', breakfast);
+        const ids = (count: number) =>
+          Array.from({ length: count }, () => randomUUID());
+        for (const body of [
+          { entryIds: [] },
+          { entryIds: [entry.id, entry.id] },
+          { entryIds: ids(51) },
+          { entryIds: ['not-an-id'] },
+          { entryIds: [entry.id], meal: 'brunch' },
+          {},
+        ]) {
+          expect((await copy('2026-11-16', body)).status).toBe(400);
+        }
+        expect(
+          (await copy('2026-13-01', { entryIds: [entry.id] })).status,
+        ).toBe(400);
+        // 50 is allowed: unknown ids then make it a 422, not a 400
+        expect((await copy('2026-11-16', { entryIds: ids(50) })).status).toBe(
+          422,
+        );
+      });
+    });
   });
 });

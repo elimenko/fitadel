@@ -124,6 +124,33 @@ export type Entry = z.infer<typeof EntrySchema>;
 
 export class EntryDto extends createZodDto(EntrySchema) {}
 
+/** A batch limit: one request can't insert an unbounded number of rows */
+export const MAX_COPIES = 50;
+
+const CopyEntriesSchema = z.object({
+  entryIds: z
+    .array(z.uuid())
+    .min(1)
+    .max(MAX_COPIES)
+    .refine((ids) => new Set(ids).size === ids.length, 'Each entry only once')
+    .describe(
+      'Entries of your diary, from any day, each once; copied in this order',
+    ),
+  meal: MealSchema.optional().describe(
+    'Every copy goes into this meal; when omitted, each keeps its own',
+  ),
+});
+
+export type CopyEntries = z.infer<typeof CopyEntriesSchema>;
+
+export class CopyEntriesDto extends createZodDto(CopyEntriesSchema) {}
+
+export class CopiedEntriesDto extends createZodDto(
+  z.object({
+    entries: z.array(EntrySchema).describe('The copies, in the order asked'),
+  }),
+) {}
+
 const NutrientsSchema = z.object({
   kcal: z.number(),
   proteinG: z.number(),

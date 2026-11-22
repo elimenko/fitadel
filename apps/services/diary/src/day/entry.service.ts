@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ProblemException } from '@fitadel/shared-http';
-import type { DiaryEntry } from '../generated/prisma/client';
+import type { DiaryEntry, Meal } from '../generated/prisma/client';
 import { fromDbDate, toDbDate } from '../calendar-date';
 import {
   type CatalogFood,
@@ -11,6 +11,7 @@ import { GoalService } from '../goal/goal.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { summarizeDay, sumValues } from './day-summary';
 import {
+  type CopyEntries,
   type Day,
   type Entry,
   type EntryChange,
@@ -151,6 +152,38 @@ export class EntryService {
     return count > 0 ? this.get(userId, id) : null;
   }
 
+  /**
+   * Copies entries of the user's diary to a day, all or none. Every copy goes into one
+   * INSERT, and a single statement is atomic, so no transaction is needed: the sources
+   * are read first, and a source deleted in between is still copied as it was read.
+   * A copy keeps its source's values and food copy, so the catalog isn't asked.
+   */
+  async copy(
+    userId: string,
+    date: string,
+    { entryIds, meal }: CopyEntries,
+  ): Promise<Entry[]> {
+    const sources = await this.prisma.diaryEntry.findMany({
+      where: { userId, id: { in: entryIds } },
+    });
+    const found = new Set(sources.map((row) => row.id));
+    const missing = entryIds.filter((id) => !found.has(id));
+    if (missing.length > 0) {
+      throw new ProblemException(422, 'No such entries in your diary', {
+        // Someone else's entries look the same: their existence isn't revealed
+        entryIds: missing,
+      });
+    }
+
+    const order = (id: string) => entryIds.indexOf(id);
+    sources.sort((a, b) => order(a.id) - order(b.id));
+    const rows = await this.prisma.diaryEntry.createManyAndReturn({
+      data: sources.map((source) => copyOf(source, toDbDate(date), meal)),
+    });
+    // uuidv7 ids follow the order the rows were inserted in, which is the order asked
+    return rows.sort((a, b) => (a.id < b.id ? -1 : 1)).map(toEntry);
+  }
+
   /** False when the user has no such entry */
   async delete(userId: string, id: string): Promise<boolean> {
     const { count } = await this.prisma.diaryEntry.deleteMany({
@@ -196,6 +229,38 @@ function foodColumns(
     fatPer100: food.per100.fatG,
     carbsPer100: food.per100.carbsG,
     fiberPer100: food.per100.fiberG,
+  };
+}
+
+/**
+ * A new entry with every value of the source: only the day and maybe the meal differ.
+ * The return type lists every column but the row's own, so a new column can't be
+ * forgotten here.
+ */
+function copyOf(
+  source: DiaryEntry,
+  date: Date,
+  meal: Meal | undefined,
+): Omit<DiaryEntry, 'id' | 'createdAt' | 'updatedAt'> {
+  return {
+    userId: source.userId,
+    date,
+    meal: meal ?? source.meal,
+    name: source.name,
+    kcal: source.kcal,
+    proteinG: source.proteinG,
+    fatG: source.fatG,
+    carbsG: source.carbsG,
+    fiberG: source.fiberG,
+    foodId: source.foodId,
+    amount: source.amount,
+    brand: source.brand,
+    basis: source.basis,
+    kcalPer100: source.kcalPer100,
+    proteinPer100: source.proteinPer100,
+    fatPer100: source.fatPer100,
+    carbsPer100: source.carbsPer100,
+    fiberPer100: source.fiberPer100,
   };
 }
 

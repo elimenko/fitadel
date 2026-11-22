@@ -54,18 +54,27 @@ dinner, snack). It stores its values for the whole entry, and an unknown macro i
 - **manual** (`{ kind: 'manual', meal, kcal, … }`): typed in by the user. Only `kcal`
   is required; the name and macros are optional.
 
-| Route                          | Does                                                                         |
-| ------------------------------ | ---------------------------------------------------------------------------- |
-| `GET /v1/days/{date}`          | the day: entries by meal, totals, targets and remaining                      |
-| `POST /v1/days/{date}/entries` | log a food or a manual entry                                                 |
-| `GET /v1/entries/{id}`         | one entry                                                                    |
-| `PUT /v1/entries/{id}`         | replace it; a new `date` or `meal` moves it; a new `foodId` copies that food |
-| `DELETE /v1/entries/{id}`      | delete it                                                                    |
+| Route                                 | Does                                                                         |
+| ------------------------------------- | ---------------------------------------------------------------------------- |
+| `GET /v1/days/{date}`                 | the day: entries by meal, totals, targets and remaining                      |
+| `POST /v1/days/{date}/entries`        | log a food or a manual entry                                                 |
+| `POST /v1/days/{date}/entries/copies` | copy entries to that day, e.g. yesterday's breakfast                         |
+| `GET /v1/entries/{id}`                | one entry                                                                    |
+| `PUT /v1/entries/{id}`                | replace it; a new `date` or `meal` moves it; a new `foodId` copies that food |
+| `DELETE /v1/entries/{id}`             | delete it                                                                    |
 
 The day view adds up the day's entries when it is read. `remaining` is the targets of
 the goal in effect minus the totals, negative when over, and `null` without a goal.
 Unknown macros count as nothing, and `incomplete` names them, so the app can show
 "at least 120 g" instead of an exact number.
+
+### Copying entries
+
+`{ entryIds, meal? }` copies up to 50 of the user's entries, from any days, to the day
+in the path: into `meal` if given, otherwise each into its own meal. A copy has the
+values of its source, and a food entry keeps its copy of the food, so copying never
+calls the catalog. It is all or nothing: if any id isn't one of the user's entries, the
+answer is `422` with those ids, and nothing is copied.
 
 ### The catalog call
 
