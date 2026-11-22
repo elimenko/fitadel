@@ -50,6 +50,70 @@ services:
       - lgtm-data:/data
       - ./tools/observability/grafana-datasources.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/grafana-datasources.yaml:ro
 
+  # Message broker for events between services (ADR-0012): one node in KRaft mode, the
+  # broker and its controller in one process (no ZooKeeper). Two listeners, because a
+  # client connects to the address the broker advertises: services on the host use
+  # localhost:9092, containers (kafka-init) use kafka:19092.
+  kafka:
+    image: apache/kafka:4.4.0@sha256:833b867a9585a141da455dc2b57431c65cbccb27f11c91f694444cca9f777e0f
+    environment:
+      CLUSTER_ID: NOc973IaFVrMXiJnIeN8Lw # any 16 bytes, base64url; fixed so the volume keeps working
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_LISTENERS: HOST://:9092,DOCKER://:19092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: HOST://localhost:9092,DOCKER://kafka:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: HOST:PLAINTEXT,DOCKER:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # One broker: internal topics can't have more than one replica
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # Topics are created on purpose (kafka-init), never by a typo in a client
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+      # A new consumer group starts at once instead of waiting for more members
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+    ports:
+      - '127.0.0.1:9092:9092'
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          '/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null',
+        ]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+
+  # Creates the topics once Kafka is healthy, then exits; already existing ones are kept.
+  # Partitions spread the keys; one consumer still reads all of them.
+  kafka-init:
+    image: apache/kafka:4.4.0@sha256:833b867a9585a141da455dc2b57431c65cbccb27f11c91f694444cca9f777e0f
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: 'no'
+    command:
+      [
+        '/opt/kafka/bin/kafka-topics.sh',
+        '--bootstrap-server',
+        'kafka:19092',
+        '--create',
+        '--if-not-exists',
+        '--topic',
+        'diary.food-logged',
+        '--partitions',
+        '3',
+        '--replication-factor',
+        '1',
+      ]
+
   # Development-only mail server: catches every email the services send (nothing is
   # delivered) and shows it in a web inbox. The services send over plain SMTP to :1025.
   mailpit:
@@ -79,3 +143,4 @@ services:
 volumes:
   postgres-data:
   lgtm-data:
+  kafka-data:
