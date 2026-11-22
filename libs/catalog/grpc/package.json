@@ -62,7 +62,7 @@
         ]
       },
       "proto-breaking": {
-        "command": "node scripts/check-breaking.mjs",
+        "command": "node ../../../tools/proto/check-breaking.mjs",
         "options": {
           "cwd": "{projectRoot}"
         }
