@@ -17,16 +17,17 @@ Write it before significant work depends on the decision, not after the fact.
 
 ## Index
 
-| ADR                                              | Title                                                            | Status   |
-| ------------------------------------------------ | ---------------------------------------------------------------- | -------- |
-| [0001](0001-record-architecture-decisions.md)    | Record architecture decisions                                    | Accepted |
-| [0002](0002-nx-monorepo-with-pnpm-workspaces.md) | Use an Nx monorepo with pnpm workspaces                          | Accepted |
-| [0003](0003-bundler-module-resolution.md)        | Use bundler module resolution for TypeScript                     | Accepted |
-| [0004](0004-jest-unit-test-runner.md)            | Use Jest as the unit test runner                                 | Accepted |
-| [0005](0005-postgresql-primary-database.md)      | Use PostgreSQL as the primary database                           | Accepted |
-| [0006](0006-postgresql-catalog-search.md)        | Use PostgreSQL trigram and full-text search for the food catalog | Accepted |
-| [0007](0007-prisma-database-access.md)           | Use Prisma for database access and migrations                    | Accepted |
-| [0008](0008-oidc-provider.md)                    | Use oidc-provider for the OpenID Provider                        | Accepted |
-| [0009](0009-envoy-api-gateway.md)                | Use Envoy as the API gateway                                     | Accepted |
-| [0010](0010-goals-and-diary-in-one-service.md)   | Keep goals and the food diary in one service                     | Accepted |
-| [0011](0011-grpc-between-services.md)            | Use gRPC for synchronous calls between services                  | Accepted |
+| ADR                                              | Title                                                             | Status   |
+| ------------------------------------------------ | ----------------------------------------------------------------- | -------- |
+| [0001](0001-record-architecture-decisions.md)    | Record architecture decisions                                     | Accepted |
+| [0002](0002-nx-monorepo-with-pnpm-workspaces.md) | Use an Nx monorepo with pnpm workspaces                           | Accepted |
+| [0003](0003-bundler-module-resolution.md)        | Use bundler module resolution for TypeScript                      | Accepted |
+| [0004](0004-jest-unit-test-runner.md)            | Use Jest as the unit test runner                                  | Accepted |
+| [0005](0005-postgresql-primary-database.md)      | Use PostgreSQL as the primary database                            | Accepted |
+| [0006](0006-postgresql-catalog-search.md)        | Use PostgreSQL trigram and full-text search for the food catalog  | Accepted |
+| [0007](0007-prisma-database-access.md)           | Use Prisma for database access and migrations                     | Accepted |
+| [0008](0008-oidc-provider.md)                    | Use oidc-provider for the OpenID Provider                         | Accepted |
+| [0009](0009-envoy-api-gateway.md)                | Use Envoy as the API gateway                                      | Accepted |
+| [0010](0010-goals-and-diary-in-one-service.md)   | Keep goals and the food diary in one service                      | Accepted |
+| [0011](0011-grpc-between-services.md)            | Use gRPC for synchronous calls between services                   | Accepted |
+| [0012](0012-kafka-events-with-outbox.md)         | Use Kafka with a transactional outbox for events between services | Accepted |
