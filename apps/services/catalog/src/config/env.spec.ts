@@ -16,6 +16,21 @@ describe('validateEnv', () => {
       OFF_TIMEOUT_MS: 2000,
       AUTH_ISSUER: 'http://localhost:8080/oidc',
       AUTH_AUDIENCE: 'https://api.fitadel.local',
+      EVENTS_ENABLED: false,
+      KAFKA_BROKERS: ['localhost:9092'],
+    });
+  });
+
+  it('turns events on, with a list of brokers', () => {
+    expect(
+      validateEnv({
+        DATABASE_URL,
+        EVENTS_ENABLED: 'true',
+        KAFKA_BROKERS: 'kafka-0:9092,kafka-1:9092',
+      }),
+    ).toMatchObject({
+      EVENTS_ENABLED: true,
+      KAFKA_BROKERS: ['kafka-0:9092', 'kafka-1:9092'],
     });
   });
 

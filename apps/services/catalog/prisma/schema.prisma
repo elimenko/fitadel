@@ -1,5 +1,6 @@
 // Catalog data model. Hand-written SQL in the migrations adds what Prisma can't express:
 // extensions, the search functions and expression indexes, and CHECK constraints.
+// Counts of logged foods come from the diary's events (ADR-0012).
 // See docs/adr/0006 and docs/adr/0007.
 
 generator client {
@@ -78,6 +79,7 @@ model Food {
   createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz
   servings        FoodServing[]
+  logCount        FoodLogCount?
 
   @@unique([source, sourceRef])
   /// One public user food per barcode
@@ -136,4 +138,26 @@ model OffLookupMiss {
   checkedAt DateTime @map("checked_at") @db.Timestamptz
 
   @@map("off_lookup_miss")
+}
+
+/// How often each food was logged in Fitadel, counted from the diary's FoodLogged events
+/// (ADR-0012). Separate from popularity, which comes from Open Food Facts.
+model FoodLogCount {
+  foodId    String   @id @map("food_id") @db.Uuid
+  food      Food     @relation(fields: [foodId], references: [id], onDelete: Cascade)
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("food_log_count")
+}
+
+/// Events already processed. Delivery is at least once, so an event_id seen before is
+/// skipped. Kept for 7 days (Kafka's default retention), then deleted.
+model ProcessedEvent {
+  eventId     String   @id @map("event_id") @db.Uuid
+  processedAt DateTime @default(now()) @map("processed_at") @db.Timestamptz
+
+  // The hourly cleanup deletes by age
+  @@index([processedAt])
+  @@map("processed_event")
 }

@@ -184,7 +184,9 @@
     ]
   },
   "dependencies": {
+    "@bufbuild/protobuf": "2.16.0",
     "@fitadel/catalog-grpc": "workspace:*",
+    "@fitadel/diary-events": "workspace:*",
     "@fitadel/shared-auth": "workspace:*",
     "@fitadel/shared-http": "workspace:*",
     "@fitadel/shared-nutrition": "workspace:*",
@@ -206,6 +208,7 @@
     "@opentelemetry/instrumentation-pino": "0.70.0",
     "@opentelemetry/instrumentation-undici": "0.34.0",
     "@opentelemetry/sdk-node": "0.300.0",
+    "@platformatic/kafka": "2.15.0",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
     "nestjs-pino": "5.3.1",
